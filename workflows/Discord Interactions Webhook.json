@@ -939,7 +939,7 @@
       "main": [
         [
           {
-            "node": "Get Batch Status",
+            "node": "Get Batch For Analysis",
             "type": "main",
             "index": 0
           }
