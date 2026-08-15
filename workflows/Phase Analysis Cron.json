@@ -1,1 +1,765 @@
-{"updatedAt":"2026-08-15T13:27:12.168Z","createdAt":"2026-08-15T09:00:13.446Z","id":"lH71jKXSOLtyevh6","name":"Phase Analysis Cron","description":null,"active":false,"isArchived":false,"nodes":[{"parameters":{"rule":{"interval":[{"field":"minutes","minutesInterval":30}]}},"type":"n8n-nodes-base.scheduleTrigger","typeVersion":1.2,"position":[17664,6912],"id":"fede64d8-baea-442a-a90a-ea785fc16873","name":"Schedule Trigger"},{"parameters":{"method":"POST","url":"https://id.rapt.io/connect/token","sendBody":true,"contentType":"form-urlencoded","bodyParameters":{"parameters":[{"name":"client_id","value":"rapt-user"},{"name":"grant_type","value":"password"},{"name":"username","value":"={{$env.RAPT_USERNAME}}"},{"name":"password","value":"={{$env.RAPT_API_SECRET}}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[17888,6912],"id":"a6bea693-ffe5-4ea6-8a59-c8d888f784f2","name":"Get RAPT Token"},{"parameters":{"operation":"executeQuery","query":"SELECT\n  b.batch_id, b.beer_name, b.current_phase, b.start_date, b.prep_alerted_for_phase,\n  dp.device_id AS pill_id, dp.device_name AS pill_name,\n  dc.device_id AS controller_id, dc.device_name AS controller_name\nFROM batches b\nJOIN devices dp ON dp.device_id = b.pill_device_id\nJOIN devices dc ON dc.device_id = b.temp_controller_device_id\nWHERE b.status = 'active';","options":{}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[18096,6912],"id":"e76edcb3-7219-4429-8b8f-1992ee016579","name":"Get Active Batches","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"url":"https://api.rapt.io/api/Hydrometers/GetTelemetry","sendQuery":true,"queryParameters":{"parameters":[{"name":"hydrometerId","value":"={{ $json.pill_id }}"},{"name":"startDate","value":"={{ $now.minus({hours:3}).toUTC().toISO() }}"},{"name":"endDate","value":"={{ $now.toUTC().toISO() }}"}]},"sendHeaders":true,"headerParameters":{"parameters":[{"name":"Authorization","value":"=Bearer {{ $('Get RAPT Token').first().json.access_token }}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[18336,6592],"id":"3919ea7b-fbfd-46e0-a1d2-c4a346a34a55","name":"Get Pill Telemetry"},{"parameters":{"url":"https://api.rapt.io/api/TemperatureControllers/GetTelemetry","sendQuery":true,"queryParameters":{"parameters":[{"name":"temperatureControllerId","value":"={{ $json.controller_id }}"},{"name":"startDate","value":"={{ $now.minus({hours:3}).toUTC().toISO() }}"},{"name":"endDate","value":"={{ $now.toUTC().toISO() }}"}]},"sendHeaders":true,"headerParameters":{"parameters":[{"name":"Authorization","value":"=Bearer {{ $('Get RAPT Token').first().json.access_token }}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[18336,6800],"id":"fd0799bf-eb99-4ffa-93b8-e1cb8ec1cdae","name":"Get Controller Telemetry"},{"parameters":{"jsCode":"const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? t.gravity / 1000 : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: batch.controller_name\n      }\n    });\n  }\n});\nreturn rows;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[18560,6592],"id":"9f61c76b-d587-4989-85c7-67fe839fd16a","name":"Format Pill Readings"},{"parameters":{"jsCode":"const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[18560,6800],"id":"855d64d9-0ba5-49a4-9d37-c8852aedefda","name":"Format Controller Readings"},{"parameters":{"operation":"executeQuery","query":"INSERT INTO pill_readings (device_id, time_utc, temperature_c, gravity_sg, gravity_velocity_sg_per_day, battery_percent, rssi_dbm, paired_temp_controller)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT (device_id, time_utc) DO NOTHING;","options":{"queryReplacement":"={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.gravity_sg}}, {{$json.gravity_velocity_sg_per_day}}, {{$json.battery_percent}}, {{$json.rssi_dbm}}, {{$json.paired_temp_controller}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[18784,6592],"id":"a9480ad5-869f-48b7-aefa-5a770ee1ed38","name":"Insert Pill Readings","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO temp_controller_readings (device_id, time_utc, temperature_c, target_temperature_c, rssi_dbm)\nVALUES ($1, $2, $3, $4, $5)\nON CONFLICT (device_id, time_utc) DO NOTHING;","options":{"queryReplacement":"={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.target_temperature_c}}, {{$json.rssi_dbm}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[18784,6800],"id":"65d433f5-2cfc-440a-926a-248ced2f3ace","name":"Insert Controller Readings","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"WITH latest_pill AS (\n  SELECT * FROM pill_readings WHERE device_id = $1 ORDER BY time_utc DESC LIMIT 1\n),\npill_24h_ago AS (\n  SELECT gravity_sg, time_utc FROM pill_readings\n  WHERE device_id = $1 AND time_utc <= (SELECT time_utc FROM latest_pill) - INTERVAL '24 hours'\n  ORDER BY time_utc DESC LIMIT 1\n),\nfirst_pill_reading AS (\n  SELECT gravity_sg, time_utc FROM pill_readings\n  WHERE device_id = $1 AND time_utc >= $3\n  ORDER BY time_utc ASC LIMIT 1\n),\nlatest_controller AS (\n  SELECT * FROM temp_controller_readings WHERE device_id = $2 ORDER BY time_utc DESC LIMIT 1\n)\nSELECT\n  lp.gravity_sg, lp.temperature_c AS pill_temp_c, lp.time_utc AS pill_time_utc,\n  p24.gravity_sg AS gravity_sg_24h_ago, p24.time_utc AS pill_time_utc_24h_ago,\n  fp.gravity_sg AS gravity_sg_og, fp.time_utc AS pill_time_utc_og,\n  lc.temperature_c AS controller_temp_c, lc.target_temperature_c, lc.time_utc AS controller_time_utc\nFROM latest_pill lp\nFULL OUTER JOIN pill_24h_ago p24 ON true\nFULL OUTER JOIN first_pill_reading fp ON true\nFULL OUTER JOIN latest_controller lc ON true;","options":{"queryReplacement":"={{$json.pill_id}}, {{$json.controller_id}}, {{$json.start_date}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[18336,7120],"id":"54abe980-bbb0-40f8-a13c-4663b9597b5f","name":"Get Latest Readings","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"jsCode":"const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const r = it.json;\n\n  const startDate = new Date(batch.start_date);\n  const hoursSinceStart = (Date.now() - startDate.getTime()) / 3600000;\n\n  // คำนวณ gravity velocity เอง (SG/วัน) จาก gravity_sg ที่เราแปลงหน่วยและยืนยัน\n  // ถูกต้องแล้วในระบบเอง แทนการเชื่อ field gravityVelocity ดิบจาก RAPT ตรงๆ\n  // เพราะ unit ของมันไม่ยืนยันชัด วิธีนี้แม่นยำกว่าและตรวจสอบย้อนกลับได้\n  let gravityVelocity = null;\n  let velocityWindowHours = null;\n  if (r.gravity_sg != null && r.gravity_sg_24h_ago != null && r.pill_time_utc && r.pill_time_utc_24h_ago) {\n    const hoursSpan = (new Date(r.pill_time_utc) - new Date(r.pill_time_utc_24h_ago)) / 3600000;\n    if (hoursSpan > 0) {\n      gravityVelocity = (r.gravity_sg - r.gravity_sg_24h_ago) / (hoursSpan / 24);\n      velocityWindowHours = hoursSpan;\n    }\n  }\n\n  const tempDiff = (r.pill_temp_c != null && r.controller_temp_c != null)\n    ? (r.pill_temp_c - r.controller_temp_c)\n    : null;\n\n  // apparent attenuation % จาก OG จริงที่ Pill วัดได้ตอนเริ่ม batch เทียบกับปัจจุบัน\n  // เป็นตัวชี้วัดหลักที่ BJCP ใช้บอกว่าใกล้จบการหมักแค่ไหน (ทั่วไปจบที่ 65-80%)\n  // เชื่อถือได้เฉพาะตอนที่ reading แรกอยู่ใกล้ start_date จริง (ไม่เกิน 24 ชม.) —\n  // ถ้าเครื่องเพิ่งเริ่มเก็บข้อมูลหลัง batch เริ่มไปแล้วหลายวัน ค่าที่ได้จะไม่ใช่ OG\n  // จริง แต่เป็น gravity ที่หมักไปแล้วบางส่วน ทำให้ attenuation% ต่ำกว่าความจริงมาก\n  // ต้องบอก AI ตรงๆ ว่าค่านี้เชื่อถือได้แค่ไหน ไม่งั้น AI จะเชื่อเลขที่ผิดมากกว่า\n  // เวลาที่ผ่านไปจริง (เคยเกิดขึ้นจริง: 139 ชม.เข้า batch แต่ attenuation อ่านได้\n  // ใกล้ 0% เพราะ OG proxy มาจาก reading ที่เพิ่งเริ่มเก็บ ทำให้ AI ตอบ lag ผิด)\n  let apparentAttenuationPercent = null;\n  let ogReliable = false;\n  if (r.gravity_sg != null && r.gravity_sg_og != null && r.gravity_sg_og > 1 && r.pill_time_utc_og) {\n    const ogDelayHours = (new Date(r.pill_time_utc_og) - startDate) / 3600000;\n    ogReliable = ogDelayHours <= 24;\n    apparentAttenuationPercent = ((r.gravity_sg_og - r.gravity_sg) / (r.gravity_sg_og - 1)) * 100;\n  }\n\n  const promptText = `คุณคือผู้เชี่ยวชาญการหมักเบียร์ (อ้างอิงหลักการจาก BJCP Yeast & Fermentation guide, John Palmer \"How to Brew\", Brew Your Own Fermentation Timeline) วิเคราะห์ว่า batch นี้อยู่เฟสไหนใน 6 เฟสนี้ โดยพิจารณาทุกตัวแปรประกอบกัน\n\nสำคัญ: ถ้าตัวชี้วัดขัดแย้งกัน ให้เชื่อ \"เวลาที่ผ่านไปจริงตั้งแต่เริ่ม batch\" และ \"ผลต่างอุณหภูมิ pill-ตู้ควบคุม\" เป็นหลักก่อนเสมอ เพราะวัดตรงและเชื่อถือได้แน่นอน ส่วน apparent attenuation ให้ใช้เป็นข้อมูลเสริมเท่านั้น โดยเฉพาะถ้าข้อมูลระบุว่า OG ไม่น่าเชื่อถือ (ดูหมายเหตุในข้อมูล batch ด้านล่าง) ห้ามใช้ attenuation ที่ต่ำผิดปกติมาสรุปว่ายังอยู่เฟส lag ทั้งที่เวลาผ่านไปเกิน 24 ชม.และมีผลต่างอุณหภูมิที่บ่งชี้การหมักแล้ว\n\n1. lag (0-24 ชม.แรกหลัง pitch): ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน, gravity แทบไม่ขยับ (apparent attenuation ~0%), แทบไม่มีผลต่างอุณหภูมิระหว่าง pill กับตู้ควบคุม (ยังไม่เกิดความร้อนจากปฏิกิริยา)\n\n2. active_ferment (วันที่ 1-4, หนักสุดมักอยู่ใน 48-72 ชม.แรก): high krausen, gravity ลดเร็วที่สุดของทั้ง batch, ตาม BJCP ช่วงนี้มักลดไปแล้วราว 2/3-3/4 ของระยะทางถึง FG (apparent attenuation ไต่ขึ้นเร็วจนใกล้ 50-75%), ปฏิกิริยาคายความร้อน (exothermic) ทำให้ pill มักอุ่นกว่าตู้ควบคุม 2-5°C — ถ้า pill temp สูงกว่าตู้ควบคุมชัดเจนคือสัญญาณเฟสนี้ที่ดี\n\n3. slowing: krausen เริ่มยุบ, อัตราลด gravity ผ่อนลงจากจุดสูงสุดแต่ยัง \"ลบชัดเจน\" (ไม่ใช่ใกล้ 0), apparent attenuation มักอยู่แถวๆ 60-80% แล้วแต่ยังไม่นิ่ง, ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลงเพราะปฏิกิริยาน้อยลง\n\n4. fg_stable: gravity velocity ใกล้ 0 ต่อเนื่อง (แนวทาง RAPT เองแนะนำให้ถือว่าหมักหลักเสร็จเมื่อ gravity velocity แตะ 0 แล้วเริ่ม cold crash ได้) ควรเห็นแนวโน้มนิ่งสัก 24-48 ชม.ถึงจะมั่นใจ, apparent attenuation ควรอยู่ในช่วงปกติของ BJCP คือ 65-80% (ต่ำ 65-70%, กลาง 71-75%, สูง 76-80%), ผลต่างอุณหภูมิ pill-ตู้ควบคุมควรใกล้ 0 ด้วย (ไม่มีความร้อนจากการหมักเหลือแล้ว)\n   ⚠️ ข้อควรระวัง: ถ้า gravity velocity นิ่งแล้วแต่ apparent attenuation ต่ำกว่า ~60% หรือนิ่งเร็วผิดปกติ (เช่นภายใน 2-3 วันแรก) อาจเป็น \"stuck fermentation\" ไม่ใช่หมักเสร็จจริง ให้ระบุความสงสัยนี้ไว้ใน reasoning ด้วย (ไม่ต้องเปลี่ยน phase ที่ตอบ แค่เตือนไว้)\n\n5. diacetyl_rest: ต้องผ่าน fg_stable มาก่อน แล้วมีการยกอุณหภูมิตู้ควบคุม (target_temperature) ขึ้นไปอยู่ช่วง 16-18°C ค้างไว้ 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่แม้ไม่บังคับ) — ดู target_temperature_c เทียบกับเฟสก่อนหน้าประกอบการตัดสิน\n\n6. cold_crash: ต้องผ่าน fg_stable (และปกติ diacetyl_rest) มาก่อน แล้วมีการลดอุณหภูมิตู้ควบคุมลงเหลือ 0-4°C ค้างไว้ 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน) เพื่อให้ยีสต์ตกตะกอน\n\nข้อมูล batch \"${batch.beer_name || '(ไม่ระบุชื่อ)'}\":\n- เริ่มหมักมาแล้ว: ${hoursSinceStart.toFixed(1)} ชั่วโมง (${(hoursSinceStart / 24).toFixed(1)} วัน)\n- เฟสล่าสุดที่บันทึกไว้: ${batch.current_phase}\n- OG ที่ Pill วัดได้จริงตอนเริ่ม batch: ${r.gravity_sg_og ?? 'ไม่มีข้อมูล (ยังไม่มี reading ตั้งแต่ start_date)'} SG${r.gravity_sg_og != null ? (ogReliable ? ' (วัดใกล้ช่วงเริ่มหมักจริง เชื่อถือได้)' : ' (⚠️ วัดได้ช้ากว่า start_date เกิน 24 ชม. — ระบบเพิ่งเริ่มเก็บข้อมูล ค่านี้ไม่ใช่ OG จริง เป็นแค่ gravity ที่หมักไปแล้วบางส่วน ห้ามใช้เป็นหลักฐานหลัก)') : ''}\n- gravity ปัจจุบัน: ${r.gravity_sg ?? 'ไม่มีข้อมูล'} SG\n- apparent attenuation ถึงตอนนี้ (คำนวณจาก OG proxy ด้านบน เทียบเกณฑ์ BJCP 65-80%): ${apparentAttenuationPercent != null ? apparentAttenuationPercent.toFixed(1) + '%' + (ogReliable ? '' : ' (⚠️ ไม่น่าเชื่อถือ เพราะ OG proxy ไม่น่าเชื่อถือตามหมายเหตุด้านบน — อย่าใช้เลขนี้สรุปว่ายังอยู่เฟส lag)') : 'คำนวณไม่ได้'}\n- gravity เมื่อ ~24 ชม.ก่อน: ${r.gravity_sg_24h_ago ?? 'ไม่มีข้อมูล (อาจยังไม่ผ่าน 24 ชม.แรกของการหมัก)'} SG\n- gravity velocity ที่คำนวณจริงจากข้อมูล 2 จุดนี้: ${gravityVelocity != null ? gravityVelocity.toFixed(5) + ' SG/วัน (ช่วงเวลาที่ใช้คำนวณจริง ' + velocityWindowHours.toFixed(1) + ' ชม.)' : 'คำนวณไม่ได้ (ข้อมูลย้อนหลังไม่พอ)'}\n- อุณหภูมิ Pill (วัดในของเหลวจริง): ${r.pill_temp_c ?? 'ไม่มีข้อมูล'}°C\n- อุณหภูมิตู้ควบคุม: ${r.controller_temp_c ?? 'ไม่มีข้อมูล'}°C\n- ผลต่างอุณหภูมิ (Pill - ตู้ควบคุม): ${tempDiff != null ? tempDiff.toFixed(2) + '°C' : 'คำนวณไม่ได้'}\n- target temperature ที่ตู้ควบคุมตั้งไว้: ${r.target_temperature_c ?? 'ไม่มีข้อมูล'}°C\n\nเพิ่มเติม: ประเมินด้วยว่า batch นี้มีสัญญาณว่ากำลังจะเข้าสู่เฟสถัดไปเร็วๆ นี้หรือไม่ (ภายในไม่กี่ชั่วโมงถึง 1-2 วันข้างหน้า แต่ยังไม่ถึงจุดที่ฟันธงเปลี่ยนเฟสได้ตอนนี้) ถ้าใช่ ให้ระบุ next_phase (เฟสถัดไปที่กำลังจะเข้า) และ prep_actions เป็นขั้นตอนที่ควรเตรียม/ทำล่วงหน้าแบบเจาะจง เช่น:\n- ใกล้เข้า diacetyl_rest: เตรียมยกอุณหภูมิตู้ควบคุมเป็น 16-18°C\n- ใกล้เข้า cold_crash: เตรียมลดอุณหภูมิตู้ควบคุมเป็น 0-4°C เตรียมอุปกรณ์/ภาชนะสำหรับ transfer หรือ keg\n- เฟสอื่นที่ไม่มีอะไรต้องเตรียมเป็นพิเศษ (เช่นใกล้เข้า active_ferment/slowing) ให้ approaching_transition เป็น false ไปเลย ไม่ต้องเดา\nถ้ายังไม่มีสัญญาณชัดเจนพอ ให้ approaching_transition เป็น false, next_phase เป็น null, prep_actions เป็น array ว่าง\n\nตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปนก่อน/หลัง รูปแบบ:\n{\"phase\": \"<lag|active_ferment|slowing|fg_stable|diacetyl_rest|cold_crash>\", \"reasoning\": [\"<เหตุผลข้อที่ 1 สั้นๆ ภาษาไทย อ้างอิงตัวเลขที่ให้มาประกอบ>\", \"<เหตุผลข้อที่ 2>\", \"...\"], \"approaching_transition\": <true|false>, \"next_phase\": <\"lag\"|\"active_ferment\"|\"slowing\"|\"fg_stable\"|\"diacetyl_rest\"|\"cold_crash\"|null>, \"prep_actions\": [\"<ขั้นตอนเตรียมตัวข้อที่ 1>\", \"...\"]}\nreasoning และ prep_actions ต้องเป็น array ของ string สั้นๆ ไม่เกิน 4 ข้อ แต่ละข้อคือประเด็นเดียว ไม่ใช่ paragraph ยาวๆ`;\n\n  results.push({\n    json: {\n      batch_id: batch.batch_id,\n      beer_name: batch.beer_name,\n      current_phase: batch.current_phase,\n      prep_alerted_for_phase: batch.prep_alerted_for_phase,\n      gravity_sg: r.gravity_sg,\n      temperature_c: r.pill_temp_c,\n      gravity_velocity: gravityVelocity,\n      prompt: promptText\n    }\n  });\n});\nreturn results;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[18560,7120],"id":"1ed230a1-4dc9-40f8-8d03-dea139ec7774","name":"Build AI Prompt"},{"parameters":{"method":"POST","url":"https://api.anthropic.com/v1/messages","authentication":"predefinedCredentialType","nodeCredentialType":"anthropicApi","sendHeaders":true,"headerParameters":{"parameters":[{"name":"anthropic-version","value":"2023-06-01"}]},"sendBody":true,"bodyParameters":{"parameters":[{"name":"model","value":"claude-sonnet-5"},{"name":"max_tokens","value":"={{ 4096 }}"},{"name":"messages","value":"={{ [{role: 'user', content: $json.prompt}] }}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[18784,7120],"id":"fb0d1e35-4514-4e3a-a6a4-67f5d227681b","name":"Call Claude","credentials":{"anthropicApi":{"id":"7SpL8QSQuPFtKCz3","name":"Anthropic account"}}},{"parameters":{"jsCode":"const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const src = $('Build AI Prompt').itemMatching(idx).json;\n  let phase = null, reasoning = null;\n  let approachingTransition = false, nextPhase = null, prepActionsText = '';\n  try {\n    const textBlock = (it.json.content || []).find(c => c.type === 'text');\n    const text = textBlock ? textBlock.text : undefined;\n    const parsed = JSON.parse(text);\n    phase = parsed.phase;\n    reasoning = Array.isArray(parsed.reasoning)\n      ? parsed.reasoning.map(line => '• ' + line).join('\\n')\n      : String(parsed.reasoning);\n    approachingTransition = parsed.approaching_transition === true;\n    nextPhase = parsed.next_phase || null;\n    const prepActionsArr = Array.isArray(parsed.prep_actions) ? parsed.prep_actions : [];\n    prepActionsText = prepActionsArr.map(a => '• ' + a).join('\\n');\n  } catch (e) {\n    phase = src.current_phase; // parse ไม่ได้ -> คงเฟสเดิมไว้ก่อน ไม่เปลี่ยนมั่ว\n    reasoning = 'AI response parse error: ' + String(e);\n    // approachingTransition/nextPhase/prepActionsText คงค่า default (false/null/'') ไว้ ไม่เดา\n  }\n  // ส่ง prep alert แค่ครั้งเดียวต่อ next_phase หนึ่งค่า กัน spam ทุก 30 นาที\n  // จนกว่า AI จะเปลี่ยนใจ (next_phase อื่น) หรือเฟสเปลี่ยนจริง (reset ที่ Update Batch Phase)\n  const shouldSendPrepAlert = approachingTransition\n    && !!nextPhase\n    && nextPhase !== src.prep_alerted_for_phase;\n  results.push({\n    json: {\n      batch_id: src.batch_id,\n      beer_name: src.beer_name,\n      previous_phase: src.current_phase,\n      detected_phase: phase,\n      reasoning,\n      gravity_sg: src.gravity_sg,\n      temperature_c: src.temperature_c,\n      gravity_velocity: src.gravity_velocity,\n      next_phase: nextPhase,\n      prep_actions_text: prepActionsText,\n      should_send_prep_alert: shouldSendPrepAlert\n    }\n  });\n});\nreturn results;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[19008,7120],"id":"f5ecad02-e65e-4811-bffa-2bd6060d867b","name":"Parse AI Response"},{"parameters":{"operation":"executeQuery","query":"INSERT INTO phase_log (batch_id, gravity_sg, temperature_c, gravity_velocity, detected_phase, ai_reasoning)\nVALUES ($1, NULLIF($2, 'null')::numeric, NULLIF($3, 'null')::numeric, NULLIF($4, 'null')::numeric, $5, $6);","options":{"queryReplacement":"={{$json.batch_id}}, {{$json.gravity_sg}}, {{$json.temperature_c}}, {{$json.gravity_velocity}}, {{$json.detected_phase}}, {{$json.reasoning}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[19216,7120],"id":"62f252bb-b179-435b-ae20-b46f8d413ce9","name":"Insert Phase Log","alwaysOutputData":true,"credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"8068c227-9955-4846-855a-d4b964908343","leftValue":"={{ $json.detected_phase }}","rightValue":"={{ $json.previous_phase }}","operator":{"type":"string","operation":"notEquals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[19440,7120],"id":"812833a9-da15-4938-aa14-537d894f774b","name":"Phase Changed?"},{"parameters":{"method":"POST","url":"=https://discord.com/api/v10/channels/1537779906820177940/messages","authentication":"predefinedCredentialType","nodeCredentialType":"discordBotApi","sendBody":true,"bodyParameters":{"parameters":[{"name":"content","value":"={{ '🔔 ' + $json.beer_name + ': เฟสเปลี่ยนจาก ' + $json.previous_phase + ' → ' + $json.detected_phase + '\\n' + $json.reasoning }}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[19664,7040],"id":"6ede404a-d969-4924-9856-940d489a0dd3","name":"Send Discord Alert","credentials":{"discordBotApi":{"id":"UoXr9Yvwl24SlcYu","name":"Discord Bot account"}}},{"parameters":{"operation":"executeQuery","query":"UPDATE batches SET current_phase = $1, last_alert_at = now(), prep_alerted_for_phase = NULL WHERE batch_id = $2;","options":{"queryReplacement":"={{ $('Parse AI Response').itemMatching($itemIndex).json.detected_phase }}, {{ $('Parse AI Response').itemMatching($itemIndex).json.batch_id }}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[19888,7040],"id":"4a880265-c20a-45b3-b8b7-418778bfb9a1","name":"Update Batch Phase","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"88aa03e1-5fb8-4c2b-a431-cbb520ddf90a","leftValue":"={{ $json.should_send_prep_alert }}","rightValue":true,"operator":{"type":"boolean","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[11296,3680],"id":"db5f273b-8110-4b0d-a9e3-11096e174600","name":"Approaching Transition?"},{"parameters":{"method":"POST","url":"=https://discord.com/api/v10/channels/1537779906820177940/messages","authentication":"predefinedCredentialType","nodeCredentialType":"discordBotApi","sendBody":true,"bodyParameters":{"parameters":[{"name":"content","value":"={{ '🧪 ' + $json.beer_name + ' ใกล้เข้าสู่เฟส ' + $json.next_phase + ' แล้ว เตรียมตัว:\\n' + $json.prep_actions_text }}"}]},"options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[11520,3680],"id":"2769acd9-c7b5-4171-b96e-66cdc296214c","name":"Send Prep Alert","credentials":{"discordBotApi":{"id":"UoXr9Yvwl24SlcYu","name":"Discord Bot account"}}},{"parameters":{"operation":"executeQuery","query":"UPDATE batches SET prep_alerted_for_phase = $1, last_prep_alert_at = now() WHERE batch_id = $2;","options":{"queryReplacement":"={{ $('Parse AI Response').itemMatching($itemIndex).json.next_phase }}, {{ $('Parse AI Response').itemMatching($itemIndex).json.batch_id }}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[11744,3680],"id":"e38038bc-03de-405e-8cac-da69b29c265b","name":"Update Prep Alert State","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}}],"connections":{"Schedule Trigger":{"main":[[{"node":"Get RAPT Token","type":"main","index":0}]]},"Get RAPT Token":{"main":[[{"node":"Get Active Batches","type":"main","index":0}]]},"Get Active Batches":{"main":[[{"node":"Get Pill Telemetry","type":"main","index":0},{"node":"Get Controller Telemetry","type":"main","index":0},{"node":"Get Latest Readings","type":"main","index":0}]]},"Get Pill Telemetry":{"main":[[{"node":"Format Pill Readings","type":"main","index":0}]]},"Format Pill Readings":{"main":[[{"node":"Insert Pill Readings","type":"main","index":0}]]},"Get Controller Telemetry":{"main":[[{"node":"Format Controller Readings","type":"main","index":0}]]},"Format Controller Readings":{"main":[[{"node":"Insert Controller Readings","type":"main","index":0}]]},"Get Latest Readings":{"main":[[{"node":"Build AI Prompt","type":"main","index":0}]]},"Build AI Prompt":{"main":[[{"node":"Call Claude","type":"main","index":0}]]},"Call Claude":{"main":[[{"node":"Parse AI Response","type":"main","index":0}]]},"Parse AI Response":{"main":[[{"node":"Insert Phase Log","type":"main","index":0},{"node":"Phase Changed?","type":"main","index":0},{"node":"Approaching Transition?","type":"main","index":0}]]},"Phase Changed?":{"main":[[{"node":"Send Discord Alert","type":"main","index":0}]]},"Send Discord Alert":{"main":[[{"node":"Update Batch Phase","type":"main","index":0}]]},"Approaching Transition?":{"main":[[{"node":"Send Prep Alert","type":"main","index":0}]]},"Send Prep Alert":{"main":[[{"node":"Update Prep Alert State","type":"main","index":0}]]}},"settings":{"executionOrder":"v1","binaryMode":"separate","availableInMCP":false},"staticData":null,"meta":null,"nodeGroups":[],"pinData":{},"versionId":"62323af2-fc91-41e9-b573-833919269644","activeVersionId":null,"versionCounter":21,"triggerCount":0,"sourceWorkflowId":null,"tags":[],"shared":[{"updatedAt":"2026-08-15T09:00:13.448Z","createdAt":"2026-08-15T09:00:13.448Z","role":"workflow:owner","workflowId":"lH71jKXSOLtyevh6","projectId":"G8JklQZEJLFyjVlq","project":{"updatedAt":"2026-06-25T15:33:47.734Z","createdAt":"2026-06-25T15:31:00.349Z","id":"G8JklQZEJLFyjVlq","name":"SUDJARIT PUATHAM <puatham@gmail.com>","type":"personal","icon":null,"description":null,"customTelemetryTags":[],"creatorId":"75355045-c620-429f-b287-4856414e8735"}}],"versionMetadata":{"name":null,"description":null}}
+{
+  "updatedAt": "2026-08-15T13:27:12.168Z",
+  "createdAt": "2026-08-15T09:00:13.446Z",
+  "id": "lH71jKXSOLtyevh6",
+  "name": "Phase Analysis Cron",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        17664,
+        6912
+      ],
+      "id": "fede64d8-baea-442a-a90a-ea785fc16873",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://id.rapt.io/connect/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "rapt-user"
+            },
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "username",
+              "value": "={{$env.RAPT_USERNAME}}"
+            },
+            {
+              "name": "password",
+              "value": "={{$env.RAPT_API_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        17888,
+        6912
+      ],
+      "id": "a6bea693-ffe5-4ea6-8a59-c8d888f784f2",
+      "name": "Get RAPT Token"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  b.batch_id, b.beer_name, b.current_phase, b.start_date, b.prep_alerted_for_phase,\n  dp.device_id AS pill_id, dp.device_name AS pill_name,\n  dc.device_id AS controller_id, dc.device_name AS controller_name\nFROM batches b\nJOIN devices dp ON dp.device_id = b.pill_device_id\nJOIN devices dc ON dc.device_id = b.temp_controller_device_id\nWHERE b.status = 'active';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        18096,
+        6912
+      ],
+      "id": "e76edcb3-7219-4429-8b8f-1992ee016579",
+      "name": "Get Active Batches",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.rapt.io/api/Hydrometers/GetTelemetry",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "hydrometerId",
+              "value": "={{ $json.pill_id }}"
+            },
+            {
+              "name": "startDate",
+              "value": "={{ DateTime.fromISO($json.start_date).toUTC().toISO() }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        18336,
+        6592
+      ],
+      "id": "3919ea7b-fbfd-46e0-a1d2-c4a346a34a55",
+      "name": "Get Pill Telemetry"
+    },
+    {
+      "parameters": {
+        "url": "https://api.rapt.io/api/TemperatureControllers/GetTelemetry",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "temperatureControllerId",
+              "value": "={{ $json.controller_id }}"
+            },
+            {
+              "name": "startDate",
+              "value": "={{ DateTime.fromISO($json.start_date).toUTC().toISO() }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        18336,
+        6800
+      ],
+      "id": "fd0799bf-eb99-4ffa-93b8-e1cb8ec1cdae",
+      "name": "Get Controller Telemetry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? t.gravity / 1000 : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: batch.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18560,
+        6592
+      ],
+      "id": "9f61c76b-d587-4989-85c7-67fe839fd16a",
+      "name": "Format Pill Readings"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18560,
+        6800
+      ],
+      "id": "855d64d9-0ba5-49a4-9d37-c8852aedefda",
+      "name": "Format Controller Readings"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pill_readings (device_id, time_utc, temperature_c, gravity_sg, gravity_velocity_sg_per_day, battery_percent, rssi_dbm, paired_temp_controller)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.gravity_sg}}, {{$json.gravity_velocity_sg_per_day}}, {{$json.battery_percent}}, {{$json.rssi_dbm}}, {{$json.paired_temp_controller}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        18784,
+        6592
+      ],
+      "id": "a9480ad5-869f-48b7-aefa-5a770ee1ed38",
+      "name": "Insert Pill Readings",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO temp_controller_readings (device_id, time_utc, temperature_c, target_temperature_c, rssi_dbm)\nVALUES ($1, $2, $3, $4, $5)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.target_temperature_c}}, {{$json.rssi_dbm}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        18784,
+        6800
+      ],
+      "id": "65d433f5-2cfc-440a-926a-248ced2f3ace",
+      "name": "Insert Controller Readings",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH latest_pill AS (\n  SELECT * FROM pill_readings WHERE device_id = $1 ORDER BY time_utc DESC LIMIT 1\n),\npill_24h_ago AS (\n  SELECT gravity_sg, time_utc FROM pill_readings\n  WHERE device_id = $1 AND time_utc <= (SELECT time_utc FROM latest_pill) - INTERVAL '24 hours'\n  ORDER BY time_utc DESC LIMIT 1\n),\nfirst_pill_reading AS (\n  SELECT gravity_sg, time_utc FROM pill_readings\n  WHERE device_id = $1 AND time_utc >= $3\n  ORDER BY time_utc ASC LIMIT 1\n),\nlatest_controller AS (\n  SELECT * FROM temp_controller_readings WHERE device_id = $2 ORDER BY time_utc DESC LIMIT 1\n)\nSELECT\n  lp.gravity_sg, lp.temperature_c AS pill_temp_c, lp.time_utc AS pill_time_utc,\n  p24.gravity_sg AS gravity_sg_24h_ago, p24.time_utc AS pill_time_utc_24h_ago,\n  fp.gravity_sg AS gravity_sg_og, fp.time_utc AS pill_time_utc_og,\n  lc.temperature_c AS controller_temp_c, lc.target_temperature_c, lc.time_utc AS controller_time_utc\nFROM latest_pill lp\nFULL OUTER JOIN pill_24h_ago p24 ON true\nFULL OUTER JOIN first_pill_reading fp ON true\nFULL OUTER JOIN latest_controller lc ON true;",
+        "options": {
+          "queryReplacement": "={{$json.pill_id}}, {{$json.controller_id}}, {{$json.start_date}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        18336,
+        7120
+      ],
+      "id": "54abe980-bbb0-40f8-a13c-4663b9597b5f",
+      "name": "Get Latest Readings",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const r = it.json;\n\n  const startDate = new Date(batch.start_date);\n  const hoursSinceStart = (Date.now() - startDate.getTime()) / 3600000;\n\n  // คำนวณ gravity velocity เอง (SG/วัน) จาก gravity_sg ที่เราแปลงหน่วยและยืนยัน\n  // ถูกต้องแล้วในระบบเอง แทนการเชื่อ field gravityVelocity ดิบจาก RAPT ตรงๆ\n  // เพราะ unit ของมันไม่ยืนยันชัด วิธีนี้แม่นยำกว่าและตรวจสอบย้อนกลับได้\n  let gravityVelocity = null;\n  let velocityWindowHours = null;\n  if (r.gravity_sg != null && r.gravity_sg_24h_ago != null && r.pill_time_utc && r.pill_time_utc_24h_ago) {\n    const hoursSpan = (new Date(r.pill_time_utc) - new Date(r.pill_time_utc_24h_ago)) / 3600000;\n    if (hoursSpan > 0) {\n      gravityVelocity = (r.gravity_sg - r.gravity_sg_24h_ago) / (hoursSpan / 24);\n      velocityWindowHours = hoursSpan;\n    }\n  }\n\n  const tempDiff = (r.pill_temp_c != null && r.controller_temp_c != null)\n    ? (r.pill_temp_c - r.controller_temp_c)\n    : null;\n\n  // apparent attenuation % จาก OG จริงที่ Pill วัดได้ตอนเริ่ม batch เทียบกับปัจจุบัน\n  // เป็นตัวชี้วัดหลักที่ BJCP ใช้บอกว่าใกล้จบการหมักแค่ไหน (ทั่วไปจบที่ 65-80%)\n  // เชื่อถือได้เฉพาะตอนที่ reading แรกอยู่ใกล้ start_date จริง (ไม่เกิน 24 ชม.) —\n  // ถ้าเครื่องเพิ่งเริ่มเก็บข้อมูลหลัง batch เริ่มไปแล้วหลายวัน ค่าที่ได้จะไม่ใช่ OG\n  // จริง แต่เป็น gravity ที่หมักไปแล้วบางส่วน ทำให้ attenuation% ต่ำกว่าความจริงมาก\n  // ต้องบอก AI ตรงๆ ว่าค่านี้เชื่อถือได้แค่ไหน ไม่งั้น AI จะเชื่อเลขที่ผิดมากกว่า\n  // เวลาที่ผ่านไปจริง (เคยเกิดขึ้นจริง: 139 ชม.เข้า batch แต่ attenuation อ่านได้\n  // ใกล้ 0% เพราะ OG proxy มาจาก reading ที่เพิ่งเริ่มเก็บ ทำให้ AI ตอบ lag ผิด)\n  let apparentAttenuationPercent = null;\n  let ogReliable = false;\n  if (r.gravity_sg != null && r.gravity_sg_og != null && r.gravity_sg_og > 1 && r.pill_time_utc_og) {\n    const ogDelayHours = (new Date(r.pill_time_utc_og) - startDate) / 3600000;\n    ogReliable = ogDelayHours <= 24;\n    apparentAttenuationPercent = ((r.gravity_sg_og - r.gravity_sg) / (r.gravity_sg_og - 1)) * 100;\n  }\n\n  const promptText = `คุณคือผู้เชี่ยวชาญการหมักเบียร์ (อ้างอิงหลักการจาก BJCP Yeast & Fermentation guide, John Palmer \"How to Brew\", Brew Your Own Fermentation Timeline) วิเคราะห์ว่า batch นี้อยู่เฟสไหนใน 6 เฟสนี้ โดยพิจารณาทุกตัวแปรประกอบกัน\n\nสำคัญ: ถ้าตัวชี้วัดขัดแย้งกัน ให้เชื่อ \"เวลาที่ผ่านไปจริงตั้งแต่เริ่ม batch\" และ \"ผลต่างอุณหภูมิ pill-ตู้ควบคุม\" เป็นหลักก่อนเสมอ เพราะวัดตรงและเชื่อถือได้แน่นอน ส่วน apparent attenuation ให้ใช้เป็นข้อมูลเสริมเท่านั้น โดยเฉพาะถ้าข้อมูลระบุว่า OG ไม่น่าเชื่อถือ (ดูหมายเหตุในข้อมูล batch ด้านล่าง) ห้ามใช้ attenuation ที่ต่ำผิดปกติมาสรุปว่ายังอยู่เฟส lag ทั้งที่เวลาผ่านไปเกิน 24 ชม.และมีผลต่างอุณหภูมิที่บ่งชี้การหมักแล้ว\n\n1. lag (0-24 ชม.แรกหลัง pitch): ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน, gravity แทบไม่ขยับ (apparent attenuation ~0%), แทบไม่มีผลต่างอุณหภูมิระหว่าง pill กับตู้ควบคุม (ยังไม่เกิดความร้อนจากปฏิกิริยา)\n\n2. active_ferment (วันที่ 1-4, หนักสุดมักอยู่ใน 48-72 ชม.แรก): high krausen, gravity ลดเร็วที่สุดของทั้ง batch, ตาม BJCP ช่วงนี้มักลดไปแล้วราว 2/3-3/4 ของระยะทางถึง FG (apparent attenuation ไต่ขึ้นเร็วจนใกล้ 50-75%), ปฏิกิริยาคายความร้อน (exothermic) ทำให้ pill มักอุ่นกว่าตู้ควบคุม 2-5°C — ถ้า pill temp สูงกว่าตู้ควบคุมชัดเจนคือสัญญาณเฟสนี้ที่ดี\n\n3. slowing: krausen เริ่มยุบ, อัตราลด gravity ผ่อนลงจากจุดสูงสุดแต่ยัง \"ลบชัดเจน\" (ไม่ใช่ใกล้ 0), apparent attenuation มักอยู่แถวๆ 60-80% แล้วแต่ยังไม่นิ่ง, ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลงเพราะปฏิกิริยาน้อยลง\n\n4. fg_stable: gravity velocity ใกล้ 0 ต่อเนื่อง (แนวทาง RAPT เองแนะนำให้ถือว่าหมักหลักเสร็จเมื่อ gravity velocity แตะ 0 แล้วเริ่ม cold crash ได้) ควรเห็นแนวโน้มนิ่งสัก 24-48 ชม.ถึงจะมั่นใจ, apparent attenuation ควรอยู่ในช่วงปกติของ BJCP คือ 65-80% (ต่ำ 65-70%, กลาง 71-75%, สูง 76-80%), ผลต่างอุณหภูมิ pill-ตู้ควบคุมควรใกล้ 0 ด้วย (ไม่มีความร้อนจากการหมักเหลือแล้ว)\n   ⚠️ ข้อควรระวัง: ถ้า gravity velocity นิ่งแล้วแต่ apparent attenuation ต่ำกว่า ~60% หรือนิ่งเร็วผิดปกติ (เช่นภายใน 2-3 วันแรก) อาจเป็น \"stuck fermentation\" ไม่ใช่หมักเสร็จจริง ให้ระบุความสงสัยนี้ไว้ใน reasoning ด้วย (ไม่ต้องเปลี่ยน phase ที่ตอบ แค่เตือนไว้)\n\n5. diacetyl_rest: ต้องผ่าน fg_stable มาก่อน แล้วมีการยกอุณหภูมิตู้ควบคุม (target_temperature) ขึ้นไปอยู่ช่วง 16-18°C ค้างไว้ 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่แม้ไม่บังคับ) — ดู target_temperature_c เทียบกับเฟสก่อนหน้าประกอบการตัดสิน\n\n6. cold_crash: ต้องผ่าน fg_stable (และปกติ diacetyl_rest) มาก่อน แล้วมีการลดอุณหภูมิตู้ควบคุมลงเหลือ 0-4°C ค้างไว้ 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน) เพื่อให้ยีสต์ตกตะกอน\n\nข้อมูล batch \"${batch.beer_name || '(ไม่ระบุชื่อ)'}\":\n- เริ่มหมักมาแล้ว: ${hoursSinceStart.toFixed(1)} ชั่วโมง (${(hoursSinceStart / 24).toFixed(1)} วัน)\n- เฟสล่าสุดที่บันทึกไว้: ${batch.current_phase}\n- OG ที่ Pill วัดได้จริงตอนเริ่ม batch: ${r.gravity_sg_og ?? 'ไม่มีข้อมูล (ยังไม่มี reading ตั้งแต่ start_date)'} SG${r.gravity_sg_og != null ? (ogReliable ? ' (วัดใกล้ช่วงเริ่มหมักจริง เชื่อถือได้)' : ' (⚠️ วัดได้ช้ากว่า start_date เกิน 24 ชม. — ระบบเพิ่งเริ่มเก็บข้อมูล ค่านี้ไม่ใช่ OG จริง เป็นแค่ gravity ที่หมักไปแล้วบางส่วน ห้ามใช้เป็นหลักฐานหลัก)') : ''}\n- gravity ปัจจุบัน: ${r.gravity_sg ?? 'ไม่มีข้อมูล'} SG\n- apparent attenuation ถึงตอนนี้ (คำนวณจาก OG proxy ด้านบน เทียบเกณฑ์ BJCP 65-80%): ${apparentAttenuationPercent != null ? apparentAttenuationPercent.toFixed(1) + '%' + (ogReliable ? '' : ' (⚠️ ไม่น่าเชื่อถือ เพราะ OG proxy ไม่น่าเชื่อถือตามหมายเหตุด้านบน — อย่าใช้เลขนี้สรุปว่ายังอยู่เฟส lag)') : 'คำนวณไม่ได้'}\n- gravity เมื่อ ~24 ชม.ก่อน: ${r.gravity_sg_24h_ago ?? 'ไม่มีข้อมูล (อาจยังไม่ผ่าน 24 ชม.แรกของการหมัก)'} SG\n- gravity velocity ที่คำนวณจริงจากข้อมูล 2 จุดนี้: ${gravityVelocity != null ? gravityVelocity.toFixed(5) + ' SG/วัน (ช่วงเวลาที่ใช้คำนวณจริง ' + velocityWindowHours.toFixed(1) + ' ชม.)' : 'คำนวณไม่ได้ (ข้อมูลย้อนหลังไม่พอ)'}\n- อุณหภูมิ Pill (วัดในของเหลวจริง): ${r.pill_temp_c ?? 'ไม่มีข้อมูล'}°C\n- อุณหภูมิตู้ควบคุม: ${r.controller_temp_c ?? 'ไม่มีข้อมูล'}°C\n- ผลต่างอุณหภูมิ (Pill - ตู้ควบคุม): ${tempDiff != null ? tempDiff.toFixed(2) + '°C' : 'คำนวณไม่ได้'}\n- target temperature ที่ตู้ควบคุมตั้งไว้: ${r.target_temperature_c ?? 'ไม่มีข้อมูล'}°C\n\nเพิ่มเติม: ประเมินด้วยว่า batch นี้มีสัญญาณว่ากำลังจะเข้าสู่เฟสถัดไปเร็วๆ นี้หรือไม่ (ภายในไม่กี่ชั่วโมงถึง 1-2 วันข้างหน้า แต่ยังไม่ถึงจุดที่ฟันธงเปลี่ยนเฟสได้ตอนนี้) ถ้าใช่ ให้ระบุ next_phase (เฟสถัดไปที่กำลังจะเข้า) และ prep_actions เป็นขั้นตอนที่ควรเตรียม/ทำล่วงหน้าแบบเจาะจง เช่น:\n- ใกล้เข้า diacetyl_rest: เตรียมยกอุณหภูมิตู้ควบคุมเป็น 16-18°C\n- ใกล้เข้า cold_crash: เตรียมลดอุณหภูมิตู้ควบคุมเป็น 0-4°C เตรียมอุปกรณ์/ภาชนะสำหรับ transfer หรือ keg\n- เฟสอื่นที่ไม่มีอะไรต้องเตรียมเป็นพิเศษ (เช่นใกล้เข้า active_ferment/slowing) ให้ approaching_transition เป็น false ไปเลย ไม่ต้องเดา\nถ้ายังไม่มีสัญญาณชัดเจนพอ ให้ approaching_transition เป็น false, next_phase เป็น null, prep_actions เป็น array ว่าง\n\nตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปนก่อน/หลัง รูปแบบ:\n{\"phase\": \"<lag|active_ferment|slowing|fg_stable|diacetyl_rest|cold_crash>\", \"reasoning\": [\"<เหตุผลข้อที่ 1 สั้นๆ ภาษาไทย อ้างอิงตัวเลขที่ให้มาประกอบ>\", \"<เหตุผลข้อที่ 2>\", \"...\"], \"approaching_transition\": <true|false>, \"next_phase\": <\"lag\"|\"active_ferment\"|\"slowing\"|\"fg_stable\"|\"diacetyl_rest\"|\"cold_crash\"|null>, \"prep_actions\": [\"<ขั้นตอนเตรียมตัวข้อที่ 1>\", \"...\"]}\nreasoning และ prep_actions ต้องเป็น array ของ string สั้นๆ ไม่เกิน 4 ข้อ แต่ละข้อคือประเด็นเดียว ไม่ใช่ paragraph ยาวๆ`;\n\n  results.push({\n    json: {\n      batch_id: batch.batch_id,\n      beer_name: batch.beer_name,\n      current_phase: batch.current_phase,\n      prep_alerted_for_phase: batch.prep_alerted_for_phase,\n      gravity_sg: r.gravity_sg,\n      temperature_c: r.pill_temp_c,\n      gravity_velocity: gravityVelocity,\n      prompt: promptText\n    }\n  });\n});\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18560,
+        7120
+      ],
+      "id": "1ed230a1-4dc9-40f8-8d03-dea139ec7774",
+      "name": "Build AI Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-sonnet-5"
+            },
+            {
+              "name": "max_tokens",
+              "value": "={{ 4096 }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ [{role: 'user', content: $json.prompt}] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        18784,
+        7120
+      ],
+      "id": "fb0d1e35-4514-4e3a-a6a4-67f5d227681b",
+      "name": "Call Claude",
+      "credentials": {
+        "anthropicApi": {
+          "id": "7SpL8QSQuPFtKCz3",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const src = $('Build AI Prompt').itemMatching(idx).json;\n  let phase = null, reasoning = null;\n  let approachingTransition = false, nextPhase = null, prepActionsText = '';\n  try {\n    const textBlock = (it.json.content || []).find(c => c.type === 'text');\n    const text = textBlock ? textBlock.text : undefined;\n    const parsed = JSON.parse(text);\n    phase = parsed.phase;\n    reasoning = Array.isArray(parsed.reasoning)\n      ? parsed.reasoning.map(line => '• ' + line).join('\\n')\n      : String(parsed.reasoning);\n    approachingTransition = parsed.approaching_transition === true;\n    nextPhase = parsed.next_phase || null;\n    const prepActionsArr = Array.isArray(parsed.prep_actions) ? parsed.prep_actions : [];\n    prepActionsText = prepActionsArr.map(a => '• ' + a).join('\\n');\n  } catch (e) {\n    phase = src.current_phase; // parse ไม่ได้ -> คงเฟสเดิมไว้ก่อน ไม่เปลี่ยนมั่ว\n    reasoning = 'AI response parse error: ' + String(e);\n    // approachingTransition/nextPhase/prepActionsText คงค่า default (false/null/'') ไว้ ไม่เดา\n  }\n  // ส่ง prep alert แค่ครั้งเดียวต่อ next_phase หนึ่งค่า กัน spam ทุก 30 นาที\n  // จนกว่า AI จะเปลี่ยนใจ (next_phase อื่น) หรือเฟสเปลี่ยนจริง (reset ที่ Update Batch Phase)\n  const shouldSendPrepAlert = approachingTransition\n    && !!nextPhase\n    && nextPhase !== src.prep_alerted_for_phase;\n  results.push({\n    json: {\n      batch_id: src.batch_id,\n      beer_name: src.beer_name,\n      previous_phase: src.current_phase,\n      detected_phase: phase,\n      reasoning,\n      gravity_sg: src.gravity_sg,\n      temperature_c: src.temperature_c,\n      gravity_velocity: src.gravity_velocity,\n      next_phase: nextPhase,\n      prep_actions_text: prepActionsText,\n      should_send_prep_alert: shouldSendPrepAlert\n    }\n  });\n});\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19008,
+        7120
+      ],
+      "id": "f5ecad02-e65e-4811-bffa-2bd6060d867b",
+      "name": "Parse AI Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO phase_log (batch_id, gravity_sg, temperature_c, gravity_velocity, detected_phase, ai_reasoning)\nVALUES ($1, NULLIF($2, 'null')::numeric, NULLIF($3, 'null')::numeric, NULLIF($4, 'null')::numeric, $5, $6);",
+        "options": {
+          "queryReplacement": "={{$json.batch_id}}, {{$json.gravity_sg}}, {{$json.temperature_c}}, {{$json.gravity_velocity}}, {{$json.detected_phase}}, {{$json.reasoning}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        19216,
+        7120
+      ],
+      "id": "62f252bb-b179-435b-ae20-b46f8d413ce9",
+      "name": "Insert Phase Log",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "8068c227-9955-4846-855a-d4b964908343",
+              "leftValue": "={{ $json.detected_phase }}",
+              "rightValue": "={{ $json.previous_phase }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        19440,
+        7120
+      ],
+      "id": "812833a9-da15-4938-aa14-537d894f774b",
+      "name": "Phase Changed?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ '🔔 ' + $json.beer_name + ': เฟสเปลี่ยนจาก ' + $json.previous_phase + ' → ' + $json.detected_phase + '\\n' + $json.reasoning }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        19664,
+        7040
+      ],
+      "id": "6ede404a-d969-4924-9856-940d489a0dd3",
+      "name": "Send Discord Alert",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET current_phase = $1, last_alert_at = now(), prep_alerted_for_phase = NULL WHERE batch_id = $2;",
+        "options": {
+          "queryReplacement": "={{ $('Parse AI Response').itemMatching($itemIndex).json.detected_phase }}, {{ $('Parse AI Response').itemMatching($itemIndex).json.batch_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        19888,
+        7040
+      ],
+      "id": "4a880265-c20a-45b3-b8b7-418778bfb9a1",
+      "name": "Update Batch Phase",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "88aa03e1-5fb8-4c2b-a431-cbb520ddf90a",
+              "leftValue": "={{ $json.should_send_prep_alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        11296,
+        3680
+      ],
+      "id": "db5f273b-8110-4b0d-a9e3-11096e174600",
+      "name": "Approaching Transition?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ '🧪 ' + $json.beer_name + ' ใกล้เข้าสู่เฟส ' + $json.next_phase + ' แล้ว เตรียมตัว:\\n' + $json.prep_actions_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        11520,
+        3680
+      ],
+      "id": "2769acd9-c7b5-4171-b96e-66cdc296214c",
+      "name": "Send Prep Alert",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET prep_alerted_for_phase = $1, last_prep_alert_at = now() WHERE batch_id = $2;",
+        "options": {
+          "queryReplacement": "={{ $('Parse AI Response').itemMatching($itemIndex).json.next_phase }}, {{ $('Parse AI Response').itemMatching($itemIndex).json.batch_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        11744,
+        3680
+      ],
+      "id": "e38038bc-03de-405e-8cac-da69b29c265b",
+      "name": "Update Prep Alert State",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get RAPT Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RAPT Token": {
+      "main": [
+        [
+          {
+            "node": "Get Active Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Batches": {
+      "main": [
+        [
+          {
+            "node": "Get Pill Telemetry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Controller Telemetry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Latest Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pill Telemetry": {
+      "main": [
+        [
+          {
+            "node": "Format Pill Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Pill Readings": {
+      "main": [
+        [
+          {
+            "node": "Insert Pill Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Controller Telemetry": {
+      "main": [
+        [
+          {
+            "node": "Format Controller Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Controller Readings": {
+      "main": [
+        [
+          {
+            "node": "Insert Controller Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Readings": {
+      "main": [
+        [
+          {
+            "node": "Build AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Insert Phase Log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Phase Changed?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Approaching Transition?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Phase Changed?": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Alert": {
+      "main": [
+        [
+          {
+            "node": "Update Batch Phase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approaching Transition?": {
+      "main": [
+        [
+          {
+            "node": "Send Prep Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Prep Alert": {
+      "main": [
+        [
+          {
+            "node": "Update Prep Alert State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "62323af2-fc91-41e9-b573-833919269644",
+  "activeVersionId": null,
+  "versionCounter": 21,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-08-15T09:00:13.448Z",
+      "createdAt": "2026-08-15T09:00:13.448Z",
+      "role": "workflow:owner",
+      "workflowId": "lH71jKXSOLtyevh6",
+      "projectId": "G8JklQZEJLFyjVlq",
+      "project": {
+        "updatedAt": "2026-06-25T15:33:47.734Z",
+        "createdAt": "2026-06-25T15:31:00.349Z",
+        "id": "G8JklQZEJLFyjVlq",
+        "name": "SUDJARIT PUATHAM <puatham@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "75355045-c620-429f-b287-4856414e8735"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

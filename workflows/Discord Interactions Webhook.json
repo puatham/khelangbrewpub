@@ -469,7 +469,7 @@
             },
             {
               "name": "startDate",
-              "value": "={{ $('Parse Interaction Command').first().json.start_date }}"
+              "value": "={{ DateTime.fromISO($('Parse Interaction Command').first().json.start_date).minus({hours: 3}).toUTC().toISO() }}"
             },
             {
               "name": "endDate",
@@ -509,7 +509,7 @@
             },
             {
               "name": "startDate",
-              "value": "={{ $('Parse Interaction Command').first().json.start_date }}"
+              "value": "={{ DateTime.fromISO($('Parse Interaction Command').first().json.start_date).minus({hours: 3}).toUTC().toISO() }}"
             },
             {
               "name": "endDate",
