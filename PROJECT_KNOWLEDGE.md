@@ -292,6 +292,15 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 
 ต้องมีตาราง `bot_state` เก็บ `last_discord_message_id` (สร้างแล้ว)
 
+**⚠️ บั๊กที่เจอตอน import (15 ส.ค.) และแก้แล้ว**: node `Get New Messages` / `Send Confirmation` ตั้ง `authentication: predefinedCredentialType` + `nodeCredentialType: discordApi` ไว้ แต่พอ import เข้า n8n จริง ช่อง "Credential Type" ขึ้นเป็น `discordApi` ตัวพิมพ์เล็กดิบๆ (ไม่ใช่ชื่อสวยแบบ "Postgres" ที่ n8n ปกติแสดง) และไม่มีช่องให้เลือก credential โผล่มาเลย → error "Credentials not found" แปลว่า `discordApi` ไม่ใช่ credential type ที่รองรับ Predefined Credential Type บน HTTP Request node ของ instance นี้
+
+**แก้โดยเปลี่ยนไปใช้ Generic Credential Type → Header Auth แทน** (เรียก Discord REST API ตรงๆ ด้วย header `Authorization: Bot <TOKEN>` ซึ่งใช้ได้แน่นอนไม่ต้องพึ่ง credential type เฉพาะของ Discord):
+
+1. สร้าง credential ใหม่: Credentials → Add Credential → **Header Auth** → Name: `Authorization`, Value: `Bot <BOT_TOKEN>` (มีเว้นวรรคหลัง `Bot`) → ตั้งชื่อ credential เช่น `Discord Bot Header`
+2. ใน node `Get New Messages` และ `Send Confirmation`: Authentication → **Generic Credential Type** → Generic Auth Type → **Header Auth** → เลือก credential ที่สร้างไว้
+
+ไฟล์ `Discord Command Intake.json` ใน repo แก้ตามนี้แล้ว (`authentication: genericCredentialType`, `genericAuthType: httpHeaderAuth`) — ถ้า import ใหม่จะไม่เจอปัญหานี้อีก แต่ credential ยังต้องเลือกเองหลัง import เสมอ (ผมไม่มีทางรู้ credential id ล่วงหน้า)
+
 Node structure:
 1. **Schedule Trigger** — ทุก 1 นาที
 2. **Postgres "Get Last Message Id"** — `SELECT value FROM bot_state WHERE key = 'last_discord_message_id'`

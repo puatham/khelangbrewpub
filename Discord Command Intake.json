@@ -40,8 +40,8 @@
     {
       "parameters": {
         "url": "=https://discord.com/api/v10/channels/<CHANNEL_ID>/messages",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "discordApi",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -177,8 +177,8 @@
       "parameters": {
         "method": "POST",
         "url": "=https://discord.com/api/v10/channels/<CHANNEL_ID>/messages",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "discordApi",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
