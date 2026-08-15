@@ -382,6 +382,24 @@ Query Parameters: `{{$json.pill}}`
 
 แผนคร่าวๆ: ต่อยอดจาก workflow 8.2 เพิ่มคำสั่งแบบ `!ferment settemp pill=Pill01 target=20.5` → เรียก `SetTargetTemperature` → insert `control_log` → ยืนยันกลับ Discord
 
+### 8.5 "Discord Interactions Webhook" (slash commands) — ✅ เสร็จ ทดสอบผ่าน (task #35, 15 ส.ค.)
+
+`/ferment_start` และ `/ferment_stop` เป็น native Discord slash command (typed params, autocomplete) แทนที่การพิมพ์ `!ferment start ...` เป็น text — คนละ workflow กับ 8.2 (Discord Command Intake ยังอยู่ ไม่ได้ลบ ใช้ polling แบบเดิมคู่ขนานกันได้)
+
+**สถาปัตยกรรม**: Discord ยิง HTTP POST มาที่ n8n Webhook โดยตรง (ต่างจาก workflow อื่นที่ n8n ไป poll Discord) ต้อง:
+- **Public "Interactions Endpoint URL"** — ตั้งใน Discord Developer Portal → General Information ชี้มาที่ n8n Webhook node's Production URL
+- **Verify ลายเซ็น Ed25519** ทุก request (Discord บังคับ ไม่งั้น endpoint ถูกปิดอัตโนมัติ) ด้วย Node `crypto` — ต้องเปิด `NODE_FUNCTION_ALLOW_BUILTIN=crypto` ใน docker-compose.yml ก่อน (n8n บล็อก built-in module ใน Code node โดย default)
+- **Deferred response**: ตอบ `{"type":5}` ภายใน 3 วินาทีก่อน (Discord โชว์ "กำลังคิด...") แล้วค่อยทำงานจริงเบื้องหลัง จบด้วย `PATCH /webhooks/{app_id}/{interaction_token}/messages/@original` แก้ข้อความเป็นผลจริง
+- **Register command แบบ guild-scoped ครั้งเดียว** ผ่าน workflow แยก `Register Slash Commands` (`PUT /applications/{id}/guilds/{guild_id}/commands`) — รันครั้งเดียวจบ ลบทิ้งได้ (ลบไปแล้ว)
+
+Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signature Valid?` → `Is Ping?`/`Is Command?` → `Respond Deferred` → `Parse Interaction Command` → `Is Start?`/`Is Stop?` → `Create Batch`/`Stop Batch` (**reuse query เดิมจาก 8.2 เป๊ะๆ**) → `Build Followup Message` → `Send Followup`
+
+**บั๊กที่เจอและแก้แล้ว**:
+- Code node ที่ import มา default เป็นโหมด **"Run Once for All Items"** ซึ่งตัวแปรลัด `$json`/`$binary` (แบบ bare ไม่ระบุ node) ใช้ไม่ได้ในโหมดนี้ ต้องใช้ `$input.first().json`/`$input.first().binary` แทน (แต่ `$('NodeName').first()` แบบระบุชื่อ node ใช้ได้ปกติ)
+- raw body ของ Webhook (`rawBody: true` option) เก็บอยู่ที่ `binary.data.data` (base64) ไม่ใช่ parse เป็น JSON ธรรมดา — ต้อง `Buffer.from(..., 'base64').toString('utf8')` เอง
+- `PATCH .../messages/@original` ตอบ "Unknown Webhook" ทั้งที่ token/application_id ถูกทุกอย่าง — สาเหตุจริงคือ body mode "Using Fields Below" ของ HTTP Request node ไม่ได้ serialize เป็น JSON จริง (ไม่มี `Content-Type: application/json`, request ออกไปแบบ `json:false`) ต้องเปลี่ยนเป็น **Body Content Type: Raw + `application/json`** พร้อม `JSON.stringify(...)` เอง ถึงจะผ่าน
+- reset `bot_state` เป็น `'0'` ตอนเคลียร์ DB ทำให้ Discord Command Intake (workflow แบบ polling เดิม) replay ข้อความเก่าซ้ำ — ไม่เกี่ยวกับ slash command แต่กระทบ batch ซ้อนกันถ้าเผลอรันทั้งสอง workflow พร้อมกันตอน DB ว่าง ระวังจุดนี้เวลาเคลียร์ข้อมูลอีก
+
 ---
 
 ## 9. กรอบ 6 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
@@ -406,16 +424,14 @@ Query Parameters: `{{$json.pill}}`
 - #31 workflow Discord command intake — ✅ เสร็จ ทดสอบผ่านครบ (start/stop/backdate) — 15 ส.ค.
 - #32 workflow cron วิเคราะห์เฟส — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #33 workflow รับคำสั่งปรับอุณหภูมิ — ❌ ยังไม่เริ่ม
-- #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 กำลังรัน cron จริงอยู่ (ดูข้อ 11) รอดูผลข้าม cycle
+- #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 DB เพิ่งเคลียร์ล่าสุด 15 ส.ค. รอผู้ใช้เริ่มลงทะเบียน batch ใหม่ผ่าน `/ferment_start`
+- #35 Discord slash command (`/ferment_start`, `/ferment_stop`) — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 
 ---
 
 ## 11. Batch การหมักจริง
 
-- **Pill01/Double Hazy IPA** (จับคู่ Fridge2, `batch_id=4`): `start_date` จริง 12 ส.ค. — cron #32 รอบล่าสุด (15 ส.ค.) จำแนกเป็น `active_ferment`
-- **Pill02/Weizen** (จับคู่ Fridge, `batch_id=3`): `start_date` จริง 10 ส.ค. — cron #32 รอบล่าสุด (15 ส.ค.) จำแนกเป็น `fg_stable`
-
-ลงทะเบียนแล้วผ่าน `!ferment start ... date=...` (backdate ตรงกับวันเริ่มจริง) ตั้งแต่ก่อนเริ่มทดสอบ #32 — `batches.current_phase`/`last_alert_at` อัปเดตอัตโนมัติทุกครั้งที่ cron ตรวจแล้วเฟสเปลี่ยน
+> ⚠️ **DB เพิ่งถูกเคลียร์ทั้งหมด (15 ส.ค.)** ระหว่างพัฒนา/ทดสอบ #32 และ #35 — ทุกตาราง (`devices`, `batches`, `pill_readings`, `temp_controller_readings`, `phase_log`, `control_log`) ว่างเปล่า มีแค่ `bot_state` ที่ seed ค่า cursor ไว้ (ตั้งเป็น Discord snowflake ของเวลาที่เคลียร์ ไม่ใช่ `'0'` — ดูเหตุผลในข้อ 8.5) **ต้องรัน Sync Devices ก่อน แล้วค่อยลงทะเบียน batch Pill01 (Double Hazy IPA, จับคู่ Fridge2)/Pill02 (Weizen, จับคู่ Fridge) ใหม่ผ่าน `/ferment_start`** พร้อม `date=` backdate ให้ตรงวันเริ่มจริง ก่อนจะกลับไปทดสอบ #32/#34 ต่อ
 
 ---
 
