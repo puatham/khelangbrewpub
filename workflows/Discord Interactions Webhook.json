@@ -1,1 +1,650 @@
-{"updatedAt":"2026-08-15T14:42:35.937Z","createdAt":"2026-08-15T13:45:18.657Z","id":"DiabUYq10uXnbYgy","name":"Discord Interactions Webhook","description":null,"active":true,"isArchived":false,"nodes":[{"parameters":{"httpMethod":"POST","path":"discord-interactions","responseMode":"responseNode","options":{"rawBody":true}},"type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-240,160],"id":"1fa2f7e3-d58b-4b23-9a6c-e91340698ca4","name":"Webhook","webhookId":"649f165b-f6ef-4a50-8bf2-0982b86c35b8"},{"parameters":{"jsCode":"const crypto = require('crypto');\n\nfunction pubKeyFromHex(hex) {\n  const raw = Buffer.from(hex, 'hex');\n  const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]);\n  return crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });\n}\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst signature = headers['x-signature-ed25519'];\nconst timestamp = headers['x-signature-timestamp'];\nconst rawBody = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n\nlet valid = false;\ntry {\n  const publicKey = pubKeyFromHex($env.DISCORD_PUBLIC_KEY);\n  const message = Buffer.from(timestamp + rawBody, 'utf8');\n  const sigBuf = Buffer.from(signature, 'hex');\n  valid = crypto.verify(null, message, publicKey, sigBuf);\n} catch (e) {\n  valid = false;\n}\n\nlet interaction = null;\ntry {\n  interaction = JSON.parse(rawBody);\n} catch (e) {\n  interaction = null;\n}\n\nreturn [{ json: { valid, interaction } }];"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[-16,160],"id":"8d2957ce-2598-47de-aff1-fb84bca0fc42","name":"Verify Signature"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"9e8e348e-40bb-422d-9f9a-e75f0c06b733","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[208,160],"id":"2183202f-e499-41c9-816b-3ad2408c3260","name":"Signature Valid?"},{"parameters":{"respondWith":"json","responseBody":"={{ {\"error\": \"invalid signature\"} }}","options":{"responseCode":401}},"type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[432,320],"id":"8eb457dd-c88e-41ba-bf90-8e8bde41c095","name":"Respond Unauthorized"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"1bf4c588-db3b-404a-90ae-b1b734782f81","leftValue":"={{ $json.interaction.type }}","rightValue":1,"operator":{"type":"number","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[432,80],"id":"d66ff290-a868-41e6-b79e-cf17abdfe14c","name":"Is Ping?"},{"parameters":{"respondWith":"json","responseBody":"={{ {\"type\": 1} }}","options":{}},"type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[640,0],"id":"46581cbf-059c-4eaa-96db-0cac52ba4dc3","name":"Respond Pong"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"1dd61f0d-b8ca-49f5-964a-043a3097d567","leftValue":"={{ $json.interaction.type }}","rightValue":2,"operator":{"type":"number","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[640,160],"id":"93ca5512-5c5c-4e04-9065-2e60f07730d0","name":"Is Command?"},{"parameters":{"respondWith":"json","responseBody":"={{ {\"type\": 5} }}","options":{}},"type":"n8n-nodes-base.respondToWebhook","typeVersion":1.4,"position":[864,160],"id":"a8beaaf6-fc77-4143-b735-78f709509f55","name":"Respond Deferred"},{"parameters":{"jsCode":"function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst action = name === 'ferment_start' ? 'start' : (name === 'ferment_stop' ? 'stop' : 'unknown');\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    controller: params.controller,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[1088,160],"id":"09e4081a-d095-4cda-b8de-71ee737814ec","name":"Parse Interaction Command"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"68fd5ad6-9d13-44cb-949d-2fa8f94752cd","leftValue":"={{ $json.action }}","rightValue":"start","operator":{"type":"string","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[1312,160],"id":"90141107-5130-40eb-9b4c-bb7c27509925","name":"Is Start?"},{"parameters":{"operation":"executeQuery","query":"INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1),\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($2) AND device_type = 'temp_controller' LIMIT 1),\n  $4,\n  $3,\n  'active'\nRETURNING batch_id;","options":{"queryReplacement":"={{$json.pill}}, {{$json.controller}}, {{$json.beer || null}}, {{$json.start_date}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[1520,64],"id":"8d89afc8-aa95-4dbb-8d1c-cfa16d791a4f","name":"Create Batch","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"bebcaff9-de2e-4876-9fef-47049981c85b","leftValue":"={{ $json.action }}","rightValue":"stop","operator":{"type":"string","operation":"equals"}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2,"position":[1520,272],"id":"5a1498a3-5c89-4f6d-8d4c-5a5267a1aa1d","name":"Is Stop?"},{"parameters":{"operation":"executeQuery","query":"UPDATE batches SET status = 'done'\nWHERE pill_device_id = (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1)\nAND status = 'active';","options":{"queryReplacement":"={{$json.pill}}"}},"type":"n8n-nodes-base.postgres","typeVersion":2.7,"position":[1744,272],"id":"282b79b8-c72b-426a-91e0-0e363844f8dc","name":"Stop Batch","credentials":{"postgres":{"id":"t6ZZv3ZEHRRZX5Q2","name":"Postgres account"}}},{"parameters":{"jsCode":"const cmd = $('Parse Interaction Command').first().json;\nconst content = cmd.action === 'start'\n  ? ('✅ เริ่ม batch: ' + (cmd.beer || '(ไม่ระบุชื่อเบียร์)') + '\\nPill: ' + cmd.pill + ' ↔ Controller: ' + cmd.controller + '\\nเริ่มหมักเมื่อ: ' + DateTime.fromISO(cmd.start_date).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm'))\n  : ('⏹️ หยุด batch ของ Pill: ' + cmd.pill);\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[1968,160],"id":"0cef8b15-1c21-43c9-b4c1-79262d22b47f","name":"Build Followup Message"},{"parameters":{"method":"PATCH","url":"=https://discord.com/api/v10/webhooks/{{ $json.application_id }}/{{ $json.interaction_token }}/messages/@original","sendBody":true,"contentType":"raw","rawContentType":"application/json","body":"={{ JSON.stringify({content: $json.content}) }}","options":{}},"type":"n8n-nodes-base.httpRequest","typeVersion":4.5,"position":[2192,160],"id":"46b235bd-6246-4701-b98a-32ad9271e26d","name":"Send Followup"}],"connections":{"Webhook":{"main":[[{"node":"Verify Signature","type":"main","index":0}]]},"Verify Signature":{"main":[[{"node":"Signature Valid?","type":"main","index":0}]]},"Signature Valid?":{"main":[[{"node":"Is Ping?","type":"main","index":0}],[{"node":"Respond Unauthorized","type":"main","index":0}]]},"Is Ping?":{"main":[[{"node":"Respond Pong","type":"main","index":0}],[{"node":"Is Command?","type":"main","index":0}]]},"Is Command?":{"main":[[{"node":"Respond Deferred","type":"main","index":0}]]},"Respond Deferred":{"main":[[{"node":"Parse Interaction Command","type":"main","index":0}]]},"Parse Interaction Command":{"main":[[{"node":"Is Start?","type":"main","index":0}]]},"Is Start?":{"main":[[{"node":"Create Batch","type":"main","index":0}],[{"node":"Is Stop?","type":"main","index":0}]]},"Create Batch":{"main":[[{"node":"Build Followup Message","type":"main","index":0}]]},"Is Stop?":{"main":[[{"node":"Stop Batch","type":"main","index":0}]]},"Stop Batch":{"main":[[{"node":"Build Followup Message","type":"main","index":0}]]},"Build Followup Message":{"main":[[{"node":"Send Followup","type":"main","index":0}]]}},"settings":{"executionOrder":"v1","binaryMode":"separate","availableInMCP":false},"staticData":null,"meta":null,"nodeGroups":[],"pinData":{},"versionId":"d60af684-7c6a-42da-853c-20bf86214ef4","activeVersionId":"ededb145-e470-4623-8457-c4492da397fd","versionCounter":6,"triggerCount":1,"sourceWorkflowId":null,"tags":[],"shared":[{"updatedAt":"2026-08-15T13:45:18.661Z","createdAt":"2026-08-15T13:45:18.661Z","role":"workflow:owner","workflowId":"DiabUYq10uXnbYgy","projectId":"G8JklQZEJLFyjVlq","project":{"updatedAt":"2026-06-25T15:33:47.734Z","createdAt":"2026-06-25T15:31:00.349Z","id":"G8JklQZEJLFyjVlq","name":"SUDJARIT PUATHAM <puatham@gmail.com>","type":"personal","icon":null,"description":null,"customTelemetryTags":[],"creatorId":"75355045-c620-429f-b287-4856414e8735"}}],"versionMetadata":{"name":null,"description":null}}
+{
+  "updatedAt": "2026-08-15T14:42:35.937Z",
+  "createdAt": "2026-08-15T13:45:18.657Z",
+  "id": "DiabUYq10uXnbYgy",
+  "name": "Discord Interactions Webhook",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "discord-interactions",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        160
+      ],
+      "id": "1fa2f7e3-d58b-4b23-9a6c-e91340698ca4",
+      "name": "Webhook",
+      "webhookId": "649f165b-f6ef-4a50-8bf2-0982b86c35b8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nfunction pubKeyFromHex(hex) {\n  const raw = Buffer.from(hex, 'hex');\n  const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]);\n  return crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });\n}\n\nconst item = $input.first();\nconst headers = item.json.headers || {};\nconst signature = headers['x-signature-ed25519'];\nconst timestamp = headers['x-signature-timestamp'];\nconst rawBody = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n\nlet valid = false;\ntry {\n  const publicKey = pubKeyFromHex($env.DISCORD_PUBLIC_KEY);\n  const message = Buffer.from(timestamp + rawBody, 'utf8');\n  const sigBuf = Buffer.from(signature, 'hex');\n  valid = crypto.verify(null, message, publicKey, sigBuf);\n} catch (e) {\n  valid = false;\n}\n\nlet interaction = null;\ntry {\n  interaction = JSON.parse(rawBody);\n} catch (e) {\n  interaction = null;\n}\n\nreturn [{ json: { valid, interaction } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        160
+      ],
+      "id": "8d2957ce-2598-47de-aff1-fb84bca0fc42",
+      "name": "Verify Signature"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9e8e348e-40bb-422d-9f9a-e75f0c06b733",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        208,
+        160
+      ],
+      "id": "2183202f-e499-41c9-816b-3ad2408c3260",
+      "name": "Signature Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"error\": \"invalid signature\"} }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        432,
+        320
+      ],
+      "id": "8eb457dd-c88e-41ba-bf90-8e8bde41c095",
+      "name": "Respond Unauthorized"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1bf4c588-db3b-404a-90ae-b1b734782f81",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        432,
+        80
+      ],
+      "id": "d66ff290-a868-41e6-b79e-cf17abdfe14c",
+      "name": "Is Ping?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 1} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        640,
+        0
+      ],
+      "id": "46581cbf-059c-4eaa-96db-0cac52ba4dc3",
+      "name": "Respond Pong"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1dd61f0d-b8ca-49f5-964a-043a3097d567",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        160
+      ],
+      "id": "93ca5512-5c5c-4e04-9065-2e60f07730d0",
+      "name": "Is Command?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 5} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        864,
+        160
+      ],
+      "id": "a8beaaf6-fc77-4143-b735-78f709509f55",
+      "name": "Respond Deferred"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst action = name === 'ferment_start' ? 'start' : (name === 'ferment_stop' ? 'stop' : (name === 'ferment_status' ? 'status' : 'unknown'));\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    controller: params.controller,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        160
+      ],
+      "id": "09e4081a-d095-4cda-b8de-71ee737814ec",
+      "name": "Parse Interaction Command"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "68fd5ad6-9d13-44cb-949d-2fa8f94752cd",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        160
+      ],
+      "id": "90141107-5130-40eb-9b4c-bb7c27509925",
+      "name": "Is Start?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1),\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($2) AND device_type = 'temp_controller' LIMIT 1),\n  $4,\n  $3,\n  'active'\nRETURNING batch_id;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}, {{$json.controller}}, {{$json.beer || null}}, {{$json.start_date}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1520,
+        64
+      ],
+      "id": "8d89afc8-aa95-4dbb-8d1c-cfa16d791a4f",
+      "name": "Create Batch",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "bebcaff9-de2e-4876-9fef-47049981c85b",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "stop",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        272
+      ],
+      "id": "5a1498a3-5c89-4f6d-8d4c-5a5267a1aa1d",
+      "name": "Is Stop?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET status = 'done'\nWHERE pill_device_id = (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1)\nAND status = 'active';",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1744,
+        272
+      ],
+      "id": "282b79b8-c72b-426a-91e0-0e363844f8dc",
+      "name": "Stop Batch",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst content = cmd.action === 'start'\n  ? ('✅ เริ่ม batch: ' + (cmd.beer || '(ไม่ระบุชื่อเบียร์)') + '\\nPill: ' + cmd.pill + ' ↔ Controller: ' + cmd.controller + '\\nเริ่มหมักเมื่อ: ' + DateTime.fromISO(cmd.start_date).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm'))\n  : ('⏹️ หยุด batch ของ Pill: ' + cmd.pill);\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        160
+      ],
+      "id": "0cef8b15-1c21-43c9-b4c1-79262d22b47f",
+      "name": "Build Followup Message"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://discord.com/api/v10/webhooks/{{ $json.application_id }}/{{ $json.interaction_token }}/messages/@original",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({content: $json.content}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2192,
+        160
+      ],
+      "id": "46b235bd-6246-4701-b98a-32ad9271e26d",
+      "name": "Send Followup"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cc26bfba-fd64-490b-aa0e-bddab5d278c2",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "status",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "id": "c8374c82-c7a8-402a-bad5-d960ba12061b",
+      "name": "Is Status?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  b.batch_id, b.beer_name,\n  pl.detected_phase, pl.ai_reasoning, pl.gravity_sg, pl.temperature_c, pl.gravity_velocity, pl.checked_at\nFROM batches b\nJOIN devices d ON d.device_id = b.pill_device_id\nLEFT JOIN LATERAL (\n  SELECT * FROM phase_log WHERE batch_id = b.batch_id ORDER BY checked_at DESC LIMIT 1\n) pl ON true\nWHERE trim(d.device_name) = trim($1) AND b.status = 'active'\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1980,
+        300
+      ],
+      "id": "736ff25a-aadf-4798-bb7c-e37330d8b4b1",
+      "name": "Get Batch Status",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst rows = $input.all();\n\nlet content;\nif (rows.length === 0 || rows[0].json.batch_id == null) {\n  content = '⚠️ ไม่พบ batch ที่ active อยู่สำหรับ Pill: ' + cmd.pill;\n} else {\n  const r = rows[0].json;\n  if (r.detected_phase == null) {\n    content = '📊 batch: ' + (r.beer_name || '(ไม่ระบุชื่อ)') + ' (Pill: ' + cmd.pill + ')\\nยังไม่มีข้อมูลวิเคราะห์เฟส (รอ Phase Analysis Cron รอบถัดไป)';\n  } else {\n    const checkedAt = DateTime.fromISO(r.checked_at).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm');\n    content = '📊 สถานะการหมัก: ' + (r.beer_name || '(ไม่ระบุชื่อ)') + ' (Pill: ' + cmd.pill + ')\\n'\n      + 'เฟสปัจจุบัน: ' + r.detected_phase + '\\n'\n      + 'gravity: ' + (r.gravity_sg ?? 'ไม่มีข้อมูล') + ' SG, อุณหภูมิ: ' + (r.temperature_c ?? 'ไม่มีข้อมูล') + '°C\\n'\n      + 'เช็คล่าสุดเมื่อ: ' + checkedAt + '\\n\\n'\n      + (r.ai_reasoning || '');\n  }\n}\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ],
+      "id": "2702d16a-a268-4565-b7c3-076aea1be7d3",
+      "name": "Build Status Message"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Is Ping?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ping?": {
+      "main": [
+        [
+          {
+            "node": "Respond Pong",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Command?": {
+      "main": [
+        [
+          {
+            "node": "Respond Deferred",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Deferred": {
+      "main": [
+        [
+          {
+            "node": "Parse Interaction Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Interaction Command": {
+      "main": [
+        [
+          {
+            "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [
+          {
+            "node": "Create Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Stop?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Batch": {
+      "main": [
+        [
+          {
+            "node": "Build Followup Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Stop?": {
+      "main": [
+        [
+          {
+            "node": "Stop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Status?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop Batch": {
+      "main": [
+        [
+          {
+            "node": "Build Followup Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Followup Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Status?": {
+      "main": [
+        [
+          {
+            "node": "Get Batch Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Batch Status": {
+      "main": [
+        [
+          {
+            "node": "Build Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "d60af684-7c6a-42da-853c-20bf86214ef4",
+  "activeVersionId": "ededb145-e470-4623-8457-c4492da397fd",
+  "versionCounter": 6,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-08-15T13:45:18.661Z",
+      "createdAt": "2026-08-15T13:45:18.661Z",
+      "role": "workflow:owner",
+      "workflowId": "DiabUYq10uXnbYgy",
+      "projectId": "G8JklQZEJLFyjVlq",
+      "project": {
+        "updatedAt": "2026-06-25T15:33:47.734Z",
+        "createdAt": "2026-06-25T15:31:00.349Z",
+        "id": "G8JklQZEJLFyjVlq",
+        "name": "SUDJARIT PUATHAM <puatham@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "75355045-c620-429f-b287-4856414e8735"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

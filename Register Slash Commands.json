@@ -1,0 +1,61 @@
+{
+  "name": "Register Slash Commands (one-time)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fd71f3df-0dff-4e73-ad99-c6561929ecd6",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://discord.com/api/v10/applications/{{ $env.DISCORD_APPLICATION_ID }}/guilds/1537776435589161050/commands",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "[{\"name\": \"ferment_start\", \"description\": \"เริ่ม batch การหมักใหม่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"controller\", \"description\": \"ชื่อ Temperature Controller (เช่น Fridge2)\", \"type\": 3, \"required\": true}, {\"name\": \"beer\", \"description\": \"ชื่อเบียร์\", \"type\": 3, \"required\": false}, {\"name\": \"date\", \"description\": \"วันเวลาเริ่มหมักย้อนหลัง เช่น 12/8/2026 00:00 (ไม่ใส่ = ตอนนี้)\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_stop\", \"description\": \"หยุด batch การหมักที่ active อยู่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_status\", \"description\": \"เช็คสถานะการหมักล่าสุดของ batch (เฟส, gravity, อุณหภูมิ, เหตุผลจาก AI)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}]",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        0
+      ],
+      "id": "2ef23c81-74d8-40d7-82f3-c4333b1eeace",
+      "name": "Register Commands",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Register Commands",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
