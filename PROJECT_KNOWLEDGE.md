@@ -456,8 +456,10 @@ Params: `{{$json.pill}}`
 - `schema.sql` — DDL 7 ตารางครบ รันได้เลย (มี index ของ readings + seed `bot_state`)
 - `er-diagram.mermaid` — ER diagram schema เต็ม
 - `backup-workflows.sh` — export workflow จาก n8n ลง `workflows/` แล้ว commit ให้ (ดูข้อ 13)
-- `workflows/` — n8n workflow ที่ export ไว้ เป็นตัว backup
+- `workflows/` — n8n workflow ที่ export ไว้ **เป็นแหล่งจริง (source of truth)** ตรงกับของบน n8n เป๊ะทุกครั้งที่ backup — ห้ามแก้ไฟล์ในนี้ด้วยมือ ให้แก้ที่ n8n แล้วรัน backup แทน
 - `PROJECT_KNOWLEDGE.md` — ไฟล์นี้
+
+**⚠️ เคยมีไฟล์ template แยกที่ root (`Discord Command Intake.json`) ไว้เป็นแบบร่างตอนออกแบบ — ลบทิ้งแล้ว (15 ส.ค.)** เพราะพอ workflow ทดสอบผ่านจริงแล้ว มีไฟล์ชื่อเดียวกัน 2 ที่ (root กับ `workflows/`) สร้างความสับสนว่าอันไหนคือของจริง จากนี้ไป `workflows/` เท่านั้นที่ถือเป็นแหล่งจริง
 
 ---
 
