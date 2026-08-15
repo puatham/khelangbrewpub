@@ -292,7 +292,7 @@
             },
             {
               "name": "max_tokens",
-              "value": "={{ 300 }}"
+              "value": "={{ 2048 }}"
             },
             {
               "name": "messages",
@@ -319,7 +319,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const src = $('Build AI Prompt').itemMatching(idx).json;\n  let phase = null, reasoning = null;\n  try {\n    const text = it.json.content[0].text;\n    const parsed = JSON.parse(text);\n    phase = parsed.phase;\n    reasoning = parsed.reasoning;\n  } catch (e) {\n    phase = src.current_phase; // parse ไม่ได้ -> คงเฟสเดิมไว้ก่อน ไม่เปลี่ยนมั่ว\n    reasoning = 'AI response parse error: ' + String(e);\n  }\n  results.push({\n    json: {\n      batch_id: src.batch_id,\n      beer_name: src.beer_name,\n      previous_phase: src.current_phase,\n      detected_phase: phase,\n      reasoning,\n      gravity_sg: src.gravity_sg,\n      temperature_c: src.temperature_c,\n      gravity_velocity: src.gravity_velocity\n    }\n  });\n});\nreturn results;"
+        "jsCode": "const items = $input.all();\nconst results = [];\nitems.forEach((it, idx) => {\n  const src = $('Build AI Prompt').itemMatching(idx).json;\n  let phase = null, reasoning = null;\n  try {\n    const textBlock = (it.json.content || []).find(c => c.type === 'text');\n    const text = textBlock ? textBlock.text : undefined;\n    const parsed = JSON.parse(text);\n    phase = parsed.phase;\n    reasoning = parsed.reasoning;\n  } catch (e) {\n    phase = src.current_phase; // parse ไม่ได้ -> คงเฟสเดิมไว้ก่อน ไม่เปลี่ยนมั่ว\n    reasoning = 'AI response parse error: ' + String(e);\n  }\n  results.push({\n    json: {\n      batch_id: src.batch_id,\n      beer_name: src.beer_name,\n      previous_phase: src.current_phase,\n      detected_phase: phase,\n      reasoning,\n      gravity_sg: src.gravity_sg,\n      temperature_c: src.temperature_c,\n      gravity_velocity: src.gravity_velocity\n    }\n  });\n});\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
