@@ -534,6 +534,39 @@
           "name": "Postgres account"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ '📋 อัปเดตสถานะ: ' + $json.beer_name + '\\nเฟส: ' + $json.detected_phase + '\\ngravity: ' + ($json.gravity_sg ?? '-') + ' SG, อุณหภูมิ Pill: ' + ($json.temperature_c ?? '-') + '°C\\nอุณหภูมิตู้ควบคุม: ' + ($json.controller_temp_c ?? '-') + '°C (target ' + ($json.target_temperature_c ?? '-') + '°C)\\nABV โดยประมาณ: ' + ($json.abv_percent ?? '-') + '%\\n\\n' + $json.reasoning }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        620
+      ],
+      "id": "14863b5c-df76-4f41-b926-46a2d043204e",
+      "name": "Send Routine Update",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      }
     }
   ],
   "connections": {
@@ -672,6 +705,11 @@
           },
           {
             "node": "Approaching Transition?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Routine Update",
             "type": "main",
             "index": 0
           }
