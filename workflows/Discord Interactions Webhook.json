@@ -234,7 +234,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH pill_device AS (\n  SELECT device_id, (raw_data->>'pairedDeviceId')::uuid AS controller_id\n  FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n)\nINSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT pd.device_id, pd.controller_id, $3, $2, 'active'\nFROM pill_device pd\nRETURNING\n  batch_id,\n  temp_controller_device_id,\n  (SELECT device_name FROM devices WHERE device_id = temp_controller_device_id) AS controller_name;",
+        "query": "WITH pill_device AS (\n  SELECT device_id, (raw_data->>'pairedDeviceId')::uuid AS controller_id\n  FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n)\nINSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT pd.device_id, pd.controller_id, $3, $2, 'active'\nFROM pill_device pd\nRETURNING\n  batch_id,\n  pill_device_id,\n  temp_controller_device_id,\n  (SELECT device_name FROM devices WHERE device_id = temp_controller_device_id) AS controller_name;",
         "options": {
           "queryReplacement": "={{$json.pill}}, {{$json.beer}}, {{$json.start_date}}"
         }
@@ -410,6 +410,195 @@
       ],
       "id": "2702d16a-a268-4565-b7c3-076aea1be7d3",
       "name": "Build Status Message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://id.rapt.io/connect/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "rapt-user"
+            },
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "username",
+              "value": "={{$env.RAPT_USERNAME}}"
+            },
+            {
+              "name": "password",
+              "value": "={{$env.RAPT_API_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        500
+      ],
+      "id": "b2cab008-84c8-4bcd-ba40-50bcdc2feb9e",
+      "name": "Get RAPT Token (Backfill)"
+    },
+    {
+      "parameters": {
+        "url": "https://api.rapt.io/api/Hydrometers/GetTelemetry",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token (Backfill)').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "hydrometerId",
+              "value": "={{ $('Create Batch').first().json.pill_device_id }}"
+            },
+            {
+              "name": "startDate",
+              "value": "={{ $('Parse Interaction Command').first().json.start_date }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        440
+      ],
+      "id": "c61cde08-0b62-4c46-8ad5-8813f5424e77",
+      "name": "Backfill Pill Telemetry"
+    },
+    {
+      "parameters": {
+        "url": "https://api.rapt.io/api/TemperatureControllers/GetTelemetry",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token (Backfill)').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "temperatureControllerId",
+              "value": "={{ $('Create Batch').first().json.temp_controller_device_id }}"
+            },
+            {
+              "name": "startDate",
+              "value": "={{ $('Parse Interaction Command').first().json.start_date }}"
+            },
+            {
+              "name": "endDate",
+              "value": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1980,
+        560
+      ],
+      "id": "c9042a44-ce99-4b9d-a3d9-a9a5df4df458",
+      "name": "Backfill Controller Telemetry"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inItems = $input.all();\nconst created = $('Create Batch').first().json;\nconst rows = [];\ninItems.forEach((it) => {\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: created.pill_device_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? t.gravity / 1000 : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: created.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        440
+      ],
+      "id": "7551a607-00fb-49f8-9cf3-692f825040f3",
+      "name": "Format Backfill Pill Readings"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inItems = $input.all();\nconst created = $('Create Batch').first().json;\nconst rows = [];\ninItems.forEach((it) => {\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: created.temp_controller_device_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        560
+      ],
+      "id": "efe51c3f-e12c-48cc-b6d7-aeceb32b13fe",
+      "name": "Format Backfill Controller Readings"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pill_readings (device_id, time_utc, temperature_c, gravity_sg, gravity_velocity_sg_per_day, battery_percent, rssi_dbm, paired_temp_controller)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.gravity_sg}}, {{$json.gravity_velocity_sg_per_day}}, {{$json.battery_percent}}, {{$json.rssi_dbm}}, {{$json.paired_temp_controller}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2420,
+        440
+      ],
+      "id": "fbc4b29c-a739-4164-be88-4b07583fc0eb",
+      "name": "Insert Backfill Pill Readings",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO temp_controller_readings (device_id, time_utc, temperature_c, target_temperature_c, rssi_dbm)\nVALUES ($1, $2, $3, $4, $5)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.target_temperature_c}}, {{$json.rssi_dbm}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2420,
+        560
+      ],
+      "id": "f205bc14-536f-4a53-980e-dfd5fd1876d3",
+      "name": "Insert Backfill Controller Readings",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
     }
   ],
   "connections": {
@@ -529,6 +718,11 @@
             "node": "Build Followup Message",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Get RAPT Token (Backfill)",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -601,6 +795,66 @@
         [
           {
             "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RAPT Token (Backfill)": {
+      "main": [
+        [
+          {
+            "node": "Backfill Pill Telemetry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Backfill Controller Telemetry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backfill Pill Telemetry": {
+      "main": [
+        [
+          {
+            "node": "Format Backfill Pill Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backfill Controller Telemetry": {
+      "main": [
+        [
+          {
+            "node": "Format Backfill Controller Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Backfill Pill Readings": {
+      "main": [
+        [
+          {
+            "node": "Insert Backfill Pill Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Backfill Controller Readings": {
+      "main": [
+        [
+          {
+            "node": "Insert Backfill Controller Readings",
             "type": "main",
             "index": 0
           }
