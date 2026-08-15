@@ -51,8 +51,11 @@ services:
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
       - N8N_PROXY_HOPS=1
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - RAPT_USERNAME=${RAPT_USERNAME}
       - RAPT_API_SECRET=${RAPT_API_SECRET}
+      - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /local-files:/files
