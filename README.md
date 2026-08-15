@@ -355,9 +355,24 @@ Query Parameters: `{{$json.pill}}`
 - n8n เวอร์ชันนี้ (2.34.6 self-hosted) **แยก JSON array ที่ HTTP node ได้รับเป็นคนละ item ให้อัตโนมัติ** (ไม่เหมือนที่ RAPT call ใน Sync Devices สมมติไว้ว่าเป็น 1 item ที่มี array ข้างใน) — ต้องวนลูปด้วย `$input.all()` ไม่ใช่ `$input.first().json`
 - `Send Confirmation`/`Update Last Message Id` ต้องอ้างอิงข้อมูลผ่าน `$('Parse Commands').item.json.xxx` ไม่ใช่ `$json.xxx` ตรงๆ เพราะ Postgres UPDATE/INSERT ไม่ได้ pass field เดิมต่อมาให้เสมอ
 
-### 8.3 "Cron วิเคราะห์เฟส" — ❌ ยังไม่ได้สร้าง (task #32)
+### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-แผนคร่าวๆ: cron ทุก 30-60 นาที → หา batch ที่ `status='active'` → ดึง `GetTelemetry` ของ pill+controller → insert เข้า `pill_readings`/`temp_controller_readings` → ส่ง prompt ให้ AI จำแนกเฟส (ใช้กรอบ 6 เฟสด้านล่าง) → insert `phase_log` → เทียบกับ `batches.current_phase` เดิม ถ้าเปลี่ยนค่อยส่ง Discord alert + update `batches.current_phase`/`last_alert_at`
+17 nodes: `Schedule Trigger` (ทุก 30 นาที) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → แยก 3 สาย: (1) `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings`, (2) `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings`, (3) `Get Latest Readings`→`Build AI Prompt`→`Call Claude`→`Parse AI Response`→`Insert Phase Log` → แยกอีกสายจาก `Parse AI Response` ตรงไป `Phase Changed?` (IF) → ถ้า true: `Send Discord Alert`→`Update Batch Phase`
+
+**AI ที่ใช้**: Claude (Anthropic Messages API, `claude-sonnet-5`, `max_tokens=4096`) ไม่ใช้ web search — เกณฑ์ 6 เฟส bake เป็น context ตายตัวในทุก prompt (ดูข้อ 9) เพราะเป็นความรู้ที่นิ่งแล้ว ไม่ต้องเสียเวลา/เงินค้นเว็บซ้ำทุก 30 นาที
+
+**ตัวชี้วัดที่ส่งให้ AI ต่อ batch**: เวลาที่ผ่านไปตั้งแต่ `start_date`, gravity ปัจจุบัน, **gravity velocity ที่คำนวณเอง** (Δgravity_sg / วัน จากข้อมูล ~24 ชม.ล่าสุดที่เราเก็บเอง แม่นยำกว่าเชื่อ field `gravityVelocity` ดิบจาก RAPT เพราะ unit ไม่ยืนยันชัด), **apparent attenuation %** (เทียบ OG จริงที่ Pill วัดได้กับ gravity ปัจจุบัน ตามเกณฑ์ BJCP 65-80%), ผลต่างอุณหภูมิ Pill-ตู้ควบคุม (exothermic heat ช่วง active fermentation), target temperature ของตู้ควบคุม
+
+**ผลทดสอบล่าสุด**: batch 4 (Double Hazy IPA/Pill01, 91.5 ชม.) → `active_ferment`, batch 3 (Weizen/Pill02, 139.5 ชม.) → `fg_stable` ทั้งคู่ผ่าน AI parse สำเร็จ (ไม่ fallback), `batches.current_phase`/`last_alert_at` อัปเดตถูก, Discord alert ยิงออก
+
+**บั๊กที่เจอและแก้แล้ว** (เก็บไว้อ้างอิงถ้าต้อง debug คล้ายกันอีก):
+- `max_tokens` ต้องส่งเป็น expression ตัวเลข (`={{ 4096 }}`) ไม่ใช่ literal string เฉยๆ ไม่งั้น Anthropic API ปฏิเสธ
+- โมเดลนี้เปิด extended thinking โดย default — `content[]` ของ response อาจมี `type: "thinking"` block มาก่อน `type: "text"` เสมอ ต้อง `.find(c => c.type === 'text')` ไม่ใช่เดา `content[0]` ตรงๆ และต้องเผื่อ `max_tokens` ให้พอทั้ง thinking+ข้อความจริง (300 ไม่พอ, ใช้ 4096)
+- RAPT `gravity` field เป็น SG×1000 ไม่ใช่ SG ตรงๆ ต้องหาร 1000
+- Postgres INSERT ที่ไม่มี `RETURNING` จะไม่ pass field เดิมของ item ต่อไปให้ node ถัดไป (`$json` จะว่างเปล่า) — ต้อง route จาก node ต้นทางตรงๆ (ในที่นี้คือให้ `Parse AI Response` แยกสายไป `Phase Changed?` ขนานกับ `Insert Phase Log` แทนที่จะให้ไหลผ่าน Postgres node ก่อน)
+- pairedItem tracking หลุดผ่าน Postgres INSERT (ไม่มี RETURNING) ทำให้ `.item`/`itemMatching()` ที่ต้องย้อนอ้างอิงผ่าน node นั้น error "Multiple matching items" เมื่อมีมากกว่า 1 item วิ่งพร้อมกัน — แก้ด้วยการ wiring ใหม่ (ข้างบน) ไม่ใช่แก้ expression
+- n8n แปลง JS `null` เป็น literal text `"null"` ตอนแทรกลง Postgres `queryReplacement` (comma-separated string) ทำให้ cast เป็น `numeric` fail ต้องครอบด้วย `NULLIF($n, 'null')::numeric`
+- OG ที่ใช้คำนวณ apparent attenuation % ต้องเช็คว่า reading แรกที่มีอยู่ใกล้ `start_date` จริงแค่ไหน (ภายใน 24 ชม.) ถ้าห่างเกินไป (เช่นเพิ่งเริ่มเก็บ telemetry หลัง batch เริ่มไปแล้วหลายวัน) ต้อง flag ให้ AI รู้ว่าเลขนี้ไม่น่าเชื่อถือ ไม่งั้น AI จะเข้าใจผิดว่ายังอยู่เฟส lag ทั้งที่ผ่านมาเป็นร้อยชั่วโมงแล้ว
 
 ### 8.4 "รับคำสั่งปรับอุณหภูมิ" — ❌ ยังไม่ได้สร้าง (task #33)
 
@@ -367,12 +382,14 @@ Query Parameters: `{{$json.pill}}`
 
 ## 9. กรอบ 6 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
 
-1. **Lag phase** — 6-24 ชม.แรก ยีสต์ปรับตัว gravity แทบไม่ขยับ
-2. **Active ferment / hi krausen** — วันที่ 1-3 อัตราลด gravity สูงสุด
-3. **Slowing down** — อัตราลดค่อยๆ ผ่อน
-4. **ยีสต์กินเสร็จ / FG นิ่ง** — gravity คงที่ต่อเนื่อง 1-2 วัน
-5. **Diacetyl rest** — ยกอุณหภูมิ +2 ถึง +4°C ค้าง 2-3 วัน (**บังคับทุก batch ไม่ใช่ optional**)
-6. **Cold crash** — ลดอุณหภูมิใกล้ 0-4°C 1-3 วัน
+อ้างอิงจาก BJCP Yeast & Fermentation guide, John Palmer "How to Brew", Brew Your Own Fermentation Timeline, และเอกสาร RAPT เอง (ไม่ได้อ้างอิงจากประสบการณ์ทำเบียร์ก่อนหน้าของโปรเจกต์นี้ — ตั้งใจ research จากแหล่งกลางเพื่อความแม่นยำ)
+
+1. **lag** — 0-24 ชม.แรกหลัง pitch ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน gravity แทบไม่ขยับ (apparent attenuation ~0%) แทบไม่มีผลต่างอุณหภูมิ pill-ตู้ควบคุม
+2. **active_ferment** — วันที่ 1-4 (หนักสุดมักอยู่ใน 48-72 ชม.แรก) high krausen, gravity ลดเร็วที่สุด, apparent attenuation ไต่ขึ้นเร็วจนใกล้ 50-75%, pill มักอุ่นกว่าตู้ควบคุม 2-5°C จากปฏิกิริยาคายความร้อน (exothermic)
+3. **slowing** — krausen เริ่มยุบ อัตราลด gravity ผ่อนลงจากจุดสูงสุดแต่ยัง "ลบชัดเจน" attenuation มักอยู่แถว 60-80% แล้วแต่ยังไม่นิ่ง ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง
+4. **fg_stable** — gravity velocity ใกล้ 0 ต่อเนื่อง 24-48 ชม. (RAPT เองแนะนำให้เริ่ม cold crash ได้เมื่อ velocity แตะ 0) attenuation ควรอยู่ 65-80% ตามเกณฑ์ BJCP ผลต่างอุณหภูมิ pill-ตู้ควบคุมควรใกล้ 0 — ⚠️ ถ้านิ่งเร็วผิดปกติหรือ attenuation ต่ำกว่า ~60% ให้สงสัยว่าเป็น stuck fermentation
+5. **diacetyl_rest** — ต้องผ่าน fg_stable ก่อน แล้วยกอุณหภูมิตู้ควบคุมเป็น 16-18°C ค้าง 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่)
+6. **cold_crash** — ต้องผ่าน fg_stable (และปกติ diacetyl_rest) ก่อน แล้วลดอุณหภูมิตู้ควบคุมเหลือ 0-4°C ค้าง 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน)
 
 ---
 
@@ -383,18 +400,18 @@ Query Parameters: `{{$json.pill}}`
 - #29 ใส่ credential ใน n8n — ✅ เสร็จ
 - #30 workflow sync devices — ✅ เสร็จ ทดสอบผ่าน
 - #31 workflow Discord command intake — ✅ เสร็จ ทดสอบผ่านครบ (start/stop/backdate) — 15 ส.ค.
-- #32 workflow cron วิเคราะห์เฟส — ❌ ยังไม่เริ่ม
+- #32 workflow cron วิเคราะห์เฟส — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #33 workflow รับคำสั่งปรับอุณหภูมิ — ❌ ยังไม่เริ่ม
-- #34 ทดสอบระบบจริงกับ Pill01/Pill02 — ❌ รอ workflow อื่นเสร็จก่อน
+- #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 กำลังรัน cron จริงอยู่ (ดูข้อ 11) รอดูผลข้าม cycle
 
 ---
 
 ## 11. Batch การหมักจริง
 
-- **Pill01** (จับคู่ Fridge2): เริ่มหมักจริง ~12 ส.ค. — ล่าสุด (ก่อนมี workflow #31) กำลังชะลอจาก hi krausen เข้า step 3
-- **Pill02** (จับคู่ Fridge): เริ่มหมักจริง ~10 ส.ค. — ล่าสุดใกล้ step 4 (FG นิ่ง) แนะนำให้ยกอุณหภูมิเป็น 20-21°C ทำ diacetyl rest
+- **Pill01/Double Hazy IPA** (จับคู่ Fridge2, `batch_id=4`): `start_date` จริง 12 ส.ค. — cron #32 รอบล่าสุด (15 ส.ค.) จำแนกเป็น `active_ferment`
+- **Pill02/Weizen** (จับคู่ Fridge, `batch_id=3`): `start_date` จริง 10 ส.ค. — cron #32 รอบล่าสุด (15 ส.ค.) จำแนกเป็น `fg_stable`
 
-> ⚠️ **ยังไม่ได้ลงทะเบียนใน `batches` table จริง** — batch สองก้อนนี้เริ่มหมักไปแล้วตั้งแต่ก่อน workflow #31 จะสร้างเสร็จ ตอนนี้ตาราง `batches` มีแค่ 2 แถวจากการทดสอบ (`Test Batch`, `Backdate Test` — ทั้งคู่ status `done` แล้ว) **Pill01/Pill02 ตัวจริงยังไม่มี batch แถวไหนอยู่ในระบบเลย** ต้องพิมพ์ `!ferment start` พร้อม `date=` ย้อนหลังตามวันที่จริงด้านบน เพื่อลงทะเบียนให้ตรงกับสถานะจริง ก่อนจะไปทำ #32/#34 ต่อ
+ลงทะเบียนแล้วผ่าน `!ferment start ... date=...` (backdate ตรงกับวันเริ่มจริง) ตั้งแต่ก่อนเริ่มทดสอบ #32 — `batches.current_phase`/`last_alert_at` อัปเดตอัตโนมัติทุกครั้งที่ cron ตรวจแล้วเฟสเปลี่ยน
 
 ---
 
