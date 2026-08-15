@@ -77,7 +77,10 @@ CREATE TABLE phase_log (
   temperature_c NUMERIC,
   gravity_velocity NUMERIC,
   detected_phase TEXT,
-  ai_reasoning TEXT
+  ai_reasoning TEXT,
+  controller_temp_c NUMERIC,
+  target_temperature_c NUMERIC,
+  abv_percent NUMERIC
 );
 
 -- ---------------------------------------------------------------------
