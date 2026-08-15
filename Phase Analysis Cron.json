@@ -292,7 +292,7 @@
             },
             {
               "name": "max_tokens",
-              "value": "={{ 2048 }}"
+              "value": "={{ 4096 }}"
             },
             {
               "name": "messages",
