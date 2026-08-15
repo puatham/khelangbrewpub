@@ -317,15 +317,9 @@
         "method": "PATCH",
         "url": "=https://discord.com/api/v10/webhooks/{{ $json.application_id }}/{{ $json.interaction_token }}/messages/@original",
         "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "content",
-              "value": "={{ $json.content }}"
-            }
-          ]
-        },
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({content: $json.content}) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
