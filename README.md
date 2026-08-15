@@ -357,7 +357,9 @@ Query Parameters: `{{$json.pill}}`
 
 ### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-17 nodes: `Schedule Trigger` (ทุก 30 นาที) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → แยก 3 สาย: (1) `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings`, (2) `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings`, (3) `Get Latest Readings`→`Build AI Prompt`→`Call Claude`→`Parse AI Response`→`Insert Phase Log` → แยกอีกสายจาก `Parse AI Response` ตรงไป `Phase Changed?` (IF) → ถ้า true: `Send Discord Alert`→`Update Batch Phase`
+20 nodes: `Schedule Trigger` (ทุก 30 นาที) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → แยก 3 สาย: (1) `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings`, (2) `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings`, (3) `Get Latest Readings`→`Build AI Prompt`→`Call Claude`→`Parse AI Response` → แยกเป็น 3 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Send Discord Alert`→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Send Prep Alert`→`Update Prep Alert State`)
+
+**"ใกล้จะเปลี่ยนเฟส เตรียมตัว" alert** (เพิ่ม 15 ส.ค.): AI ประเมินเพิ่มว่า batch มีสัญญาณใกล้เข้าเฟสถัดไปหรือไม่ (`approaching_transition`/`next_phase`/`prep_actions` ใน JSON response) ถ้าใช่จะส่ง Discord alert แยกต่างหาก บอกสิ่งที่ควรเตรียม (เช่น ใกล้ diacetyl_rest → เตรียมยกอุณหภูมิ 16-18°C) กันสแปมด้วย `batches.prep_alerted_for_phase` — ส่งครั้งเดียวต่อ `next_phase` หนึ่งค่า จนกว่า AI จะเปลี่ยนใจเป็น next_phase อื่น หรือเฟสเปลี่ยนจริง (reset เป็น `NULL` อัตโนมัติใน `Update Batch Phase`)
 
 **AI ที่ใช้**: Claude (Anthropic Messages API, `claude-sonnet-5`, `max_tokens=4096`) ไม่ใช้ web search — เกณฑ์ 6 เฟส bake เป็น context ตายตัวในทุก prompt (ดูข้อ 9) เพราะเป็นความรู้ที่นิ่งแล้ว ไม่ต้องเสียเวลา/เงินค้นเว็บซ้ำทุก 30 นาที
 
@@ -373,6 +375,8 @@ Query Parameters: `{{$json.pill}}`
 - pairedItem tracking หลุดผ่าน Postgres INSERT (ไม่มี RETURNING) ทำให้ `.item`/`itemMatching()` ที่ต้องย้อนอ้างอิงผ่าน node นั้น error "Multiple matching items" เมื่อมีมากกว่า 1 item วิ่งพร้อมกัน — แก้ด้วยการ wiring ใหม่ (ข้างบน) ไม่ใช่แก้ expression
 - n8n แปลง JS `null` เป็น literal text `"null"` ตอนแทรกลง Postgres `queryReplacement` (comma-separated string) ทำให้ cast เป็น `numeric` fail ต้องครอบด้วย `NULLIF($n, 'null')::numeric`
 - OG ที่ใช้คำนวณ apparent attenuation % ต้องเช็คว่า reading แรกที่มีอยู่ใกล้ `start_date` จริงแค่ไหน (ภายใน 24 ชม.) ถ้าห่างเกินไป (เช่นเพิ่งเริ่มเก็บ telemetry หลัง batch เริ่มไปแล้วหลายวัน) ต้อง flag ให้ AI รู้ว่าเลขนี้ไม่น่าเชื่อถือ ไม่งั้น AI จะเข้าใจผิดว่ายังอยู่เฟส lag ทั้งที่ผ่านมาเป็นร้อยชั่วโมงแล้ว
+- `Update Prep Alert State` เจอบั๊กเดียวกับ `Update Batch Phase`: อยู่หลัง `Send Prep Alert` (HTTP node ที่ทับ `$json` ด้วย response ของ Discord) จึงอ่าน `$json.next_phase`/`$json.batch_id` ตรงๆ ไม่ได้ ต้องอ้างอิง `$('Parse AI Response').itemMatching($itemIndex).json.xxx` เหมือนกัน
+- reset `bot_state.last_discord_message_id` เป็น `'0'` ตอนเคลียร์ข้อมูลทดสอบ **ทำให้ Discord Command Intake replay ข้อความเก่าทั้งหมดในแชทซ้ำ** (สร้าง batch ซ้อนกันหลายสิบแถว) วิธีที่ถูกต้องคือตั้งเป็น Discord snowflake ของเวลาปัจจุบันแทน (`(now_ms - 1420070400000) << 22`) เพื่อให้ intake ไม่ไปอ่านข้อความที่เก่ากว่าตอนเคลียร์
 
 ### 8.4 "รับคำสั่งปรับอุณหภูมิ" — ❌ ยังไม่ได้สร้าง (task #33)
 
