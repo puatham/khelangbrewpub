@@ -28,7 +28,11 @@ CREATE TABLE batches (
   beer_name TEXT,
   current_phase TEXT DEFAULT 'lag',
   last_alert_at TIMESTAMPTZ,
-  status TEXT DEFAULT 'active'
+  status TEXT DEFAULT 'active',
+  -- กันสแปม "ใกล้จะเปลี่ยนเฟส" alert: ส่งครั้งเดียวต่อ next_phase ที่ AI เสนอ
+  -- reset กลับเป็น NULL ทุกครั้งที่เฟสเปลี่ยนจริง (ดู Update Batch Phase)
+  prep_alerted_for_phase TEXT,
+  last_prep_alert_at TIMESTAMPTZ
 );
 
 -- ---------------------------------------------------------------------
