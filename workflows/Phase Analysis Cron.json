@@ -547,7 +547,7 @@
           "parameters": [
             {
               "name": "content",
-              "value": "={{ '📋 อัปเดตสถานะ: ' + $json.beer_name + '\\nเฟส: ' + $json.detected_phase + '\\ngravity: ' + ($json.gravity_sg ?? '-') + ' SG, อุณหภูมิ Pill: ' + ($json.temperature_c ?? '-') + '°C\\nอุณหภูมิตู้ควบคุม: ' + ($json.controller_temp_c ?? '-') + '°C (target ' + ($json.target_temperature_c ?? '-') + '°C)\\nABV โดยประมาณ: ' + ($json.abv_percent ?? '-') + '%\\n\\n' + $json.reasoning }}"
+              "value": "={{ '📋 อัปเดตสถานะ: ' + $json.beer_name + '\\nเฟส: ' + $json.detected_phase + '\\ngravity: ' + ($json.gravity_sg ?? '-') + ' SG, อุณหภูมิ Pill: ' + ($json.temperature_c ?? '-') + '°C\\nอุณหภูมิตู้ควบคุม: ' + ($json.controller_temp_c ?? '-') + '°C (target ' + ($json.target_temperature_c ?? '-') + '°C)\\nABV โดยประมาณ: ' + ($json.abv_percent ?? '-') + '%\\n\\n' + $json.reasoning + ($json.next_phase ? ('\\n\\n🔜 ใกล้เข้าเฟส ' + $json.next_phase + ' เตรียมตัว:\\n' + $json.prep_actions_text) : '') }}"
             }
           ]
         },
