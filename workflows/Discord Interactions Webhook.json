@@ -234,9 +234,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1),\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($2) AND device_type = 'temp_controller' LIMIT 1),\n  $4,\n  $3,\n  'active'\nRETURNING batch_id;",
+        "query": "WITH pill_device AS (\n  SELECT device_id, (raw_data->>'pairedDeviceId')::uuid AS controller_id\n  FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n)\nINSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT pd.device_id, pd.controller_id, $3, $2, 'active'\nFROM pill_device pd\nRETURNING\n  batch_id,\n  temp_controller_device_id,\n  (SELECT device_name FROM devices WHERE device_id = temp_controller_device_id) AS controller_name;",
         "options": {
-          "queryReplacement": "={{$json.pill}}, {{$json.controller}}, {{$json.beer || null}}, {{$json.start_date}}"
+          "queryReplacement": "={{$json.pill}}, {{$json.beer}}, {{$json.start_date}}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -312,7 +312,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst content = cmd.action === 'start'\n  ? ('✅ เริ่ม batch: ' + (cmd.beer || '(ไม่ระบุชื่อเบียร์)') + '\\nPill: ' + cmd.pill + ' ↔ Controller: ' + cmd.controller + '\\nเริ่มหมักเมื่อ: ' + DateTime.fromISO(cmd.start_date).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm'))\n  : ('⏹️ หยุด batch ของ Pill: ' + cmd.pill);\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nlet content;\nif (cmd.action === 'start') {\n  const created = $('Create Batch').first().json;\n  const controllerLabel = created.controller_name || '(ไม่พบ Controller ที่จับคู่ไว้ใน RAPT — เช็คการ pair ใน RAPT แล้ว sync devices ใหม่)';\n  content = '✅ เริ่ม batch: ' + cmd.beer + '\\nPill: ' + cmd.pill + ' ↔ Controller: ' + controllerLabel + '\\nเริ่มหมักเมื่อ: ' + DateTime.fromISO(cmd.start_date).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm');\n} else {\n  content = '⏹️ หยุด batch ของ Pill: ' + cmd.pill;\n}\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
