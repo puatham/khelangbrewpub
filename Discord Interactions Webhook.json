@@ -1,0 +1,503 @@
+{
+  "name": "Discord Interactions Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "discord-interactions",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ab6dc2ba-4dec-41f7-8ec8-3946f97a9539",
+      "name": "Webhook",
+      "webhookId": "649f165b-f6ef-4a50-8bf2-0982b86c35b8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nfunction pubKeyFromHex(hex) {\n  const raw = Buffer.from(hex, 'hex');\n  const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), raw]);\n  return crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });\n}\n\nconst headers = $json.headers || {};\nconst signature = headers['x-signature-ed25519'];\nconst timestamp = headers['x-signature-timestamp'];\nconst rawBody = Buffer.from($binary.data.data, 'base64').toString('utf8');\n\nlet valid = false;\ntry {\n  const publicKey = pubKeyFromHex($env.DISCORD_PUBLIC_KEY);\n  const message = Buffer.from(timestamp + rawBody, 'utf8');\n  const sigBuf = Buffer.from(signature, 'hex');\n  valid = crypto.verify(null, message, publicKey, sigBuf);\n} catch (e) {\n  valid = false;\n}\n\nlet interaction = null;\ntry {\n  interaction = JSON.parse(rawBody);\n} catch (e) {\n  interaction = null;\n}\n\nreturn [{ json: { valid, interaction } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "08e30728-b0e4-423d-949f-43ae424be3eb",
+      "name": "Verify Signature"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "9e8e348e-40bb-422d-9f9a-e75f0c06b733",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "116a6e45-bc11-4247-a4a1-6b2bc6ec52cf",
+      "name": "Signature Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"error\": \"invalid signature\"} }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        660,
+        160
+      ],
+      "id": "03ce6bf6-12d2-4021-b8a4-ec03231f6c3a",
+      "name": "Respond Unauthorized"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1bf4c588-db3b-404a-90ae-b1b734782f81",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -80
+      ],
+      "id": "3937c267-784e-4930-aa23-c757640dc478",
+      "name": "Is Ping?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 1} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        880,
+        -160
+      ],
+      "id": "0fe57685-0bfc-459e-8776-2857a355d084",
+      "name": "Respond Pong"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1dd61f0d-b8ca-49f5-964a-043a3097d567",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "1eba87e0-3ca0-4bfd-84a2-b8bf2a71b3f3",
+      "name": "Is Command?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 5} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "78c10e35-39a4-4a1e-a87c-153cf9bd6afa",
+      "name": "Respond Deferred"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst action = name === 'ferment_start' ? 'start' : (name === 'ferment_stop' ? 'stop' : 'unknown');\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    controller: params.controller,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "5229e746-ca98-46f2-808c-e594b46df5ab",
+      "name": "Parse Interaction Command"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "68fd5ad6-9d13-44cb-949d-2fa8f94752cd",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "id": "19ebe2ba-8890-4b26-93ac-cf3545acd9b7",
+      "name": "Is Start?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1),\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($2) AND device_type = 'temp_controller' LIMIT 1),\n  $4,\n  $3,\n  'active'\nRETURNING batch_id;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}, {{$json.controller}}, {{$json.beer || null}}, {{$json.start_date}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1760,
+        -100
+      ],
+      "id": "1cab79c0-b485-43a3-a4db-0b640ee82874",
+      "name": "Create Batch",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "bebcaff9-de2e-4876-9fef-47049981c85b",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "stop",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        100
+      ],
+      "id": "67324b6b-1727-4938-9926-f79cd3c52cf7",
+      "name": "Is Stop?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET status = 'done'\nWHERE pill_device_id = (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1)\nAND status = 'active';",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1980,
+        100
+      ],
+      "id": "b1554452-0d7d-4c7e-a340-379203fae149",
+      "name": "Stop Batch",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst content = cmd.action === 'start'\n  ? ('✅ เริ่ม batch: ' + (cmd.beer || '(ไม่ระบุชื่อเบียร์)') + '\\nPill: ' + cmd.pill + ' ↔ Controller: ' + cmd.controller + '\\nเริ่มหมักเมื่อ: ' + DateTime.fromISO(cmd.start_date).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm'))\n  : ('⏹️ หยุด batch ของ Pill: ' + cmd.pill);\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        0
+      ],
+      "id": "65521cff-21ca-46ae-9658-b2eacaab67c3",
+      "name": "Build Followup Message"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://discord.com/api/v10/webhooks/{{ $json.application_id }}/{{ $json.interaction_token }}/messages/@original",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2420,
+        0
+      ],
+      "id": "a366499d-e738-4151-befb-59345a6e055e",
+      "name": "Send Followup"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Is Ping?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ping?": {
+      "main": [
+        [
+          {
+            "node": "Respond Pong",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Command?": {
+      "main": [
+        [
+          {
+            "node": "Respond Deferred",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Respond Deferred": {
+      "main": [
+        [
+          {
+            "node": "Parse Interaction Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Interaction Command": {
+      "main": [
+        [
+          {
+            "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [
+          {
+            "node": "Create Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Stop?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Batch": {
+      "main": [
+        [
+          {
+            "node": "Build Followup Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Stop?": {
+      "main": [
+        [
+          {
+            "node": "Stop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Stop Batch": {
+      "main": [
+        [
+          {
+            "node": "Build Followup Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Followup Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
