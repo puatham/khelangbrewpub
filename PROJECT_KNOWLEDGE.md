@@ -84,6 +84,8 @@ Auth: `POST https://id.rapt.io/connect/token` (form-urlencoded: `client_id=rapt-
 
 ## 5. Database Schema (Postgres) — สร้างครบแล้วบน VPS
 
+> ⚠️ **แก้จากที่เคยเข้าใจผิด** (15 ส.ค.): เอกสารเวอร์ชันก่อนบอกว่าสร้างครบ 7 ตารางแล้ว แต่เช็คของจริงบน VPS พบว่ามีแค่ 6 ตาราง — **`bot_state` ไม่เคยถูกสร้างจริง** (น่าจะตกหล่นตอน migrate หรือ session ก่อนไม่ได้รันจริง) สร้างให้แล้ววันนี้ด้วย DDL เดียวกับด้านล่าง ตอนนี้ครบ 7 ตารางแล้วจริง — สำคัญเพราะ workflow #31 Discord Command Intake ต้องใช้ตารางนี้โดยตรง
+
 ```sql
 CREATE TABLE devices (
   device_id UUID PRIMARY KEY,
@@ -374,7 +376,7 @@ Params: `{{$json.pill}}`
 
 ## 10. Task list สถานะล่าสุด (อ้างอิงเลข task ใน session เดิม)
 
-- #27 สร้างตาราง Postgres — ✅ เสร็จ (7 ตารางครบ)
+- #27 สร้างตาราง Postgres — ✅ เสร็จ (7 ตารางครบ — `bot_state` เพิ่งสร้างจริง 15 ส.ค. ของเดิมมีแค่ 6 ตาราง ดูข้อ 5)
 - #28 ตั้งค่า Discord bot — ✅ เสร็จ
 - #29 ใส่ credential ใน n8n — ✅ เสร็จ
 - #30 workflow sync devices — ✅ เสร็จ ทดสอบผ่าน
