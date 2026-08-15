@@ -20,6 +20,14 @@
 # ตั้ง cron ให้ backup ทุกวันตี 3:
 #   0 3 * * * /docker/ferment-agent/repo/backup-workflows.sh --push >> /var/log/n8n-backup.log 2>&1
 #
+# n8n instance เดียวกันนี้มี workflow อื่นที่ไม่เกี่ยวกับโปรเจกต์ปนอยู่ด้วย
+# (ไฟล์ทดสอบ/workshop เก่า) — export --all จะดึงมาหมดทุกตัว สคริปต์นี้กรอง
+# เหลือเฉพาะที่อยู่ใน workflows/.allowed-ids (1 workflow id ต่อบรรทัด, ดู
+# id จาก field "id" ในตัว JSON) ถ้าสร้าง workflow ใหม่ของโปรเจกต์นี้ (เช่น
+# #31 Discord Command Intake) ต้องเติม id ของมันลงไฟล์นั้นด้วย ไม่งั้นจะถูก
+# กรองทิ้งทุกรอบ backup — ถ้าไฟล์ .allowed-ids ไม่มีอยู่เลย จะไม่กรอง (เก็บ
+# ทุก workflow ตามพฤติกรรมเดิม)
+#
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +49,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --push)    DO_PUSH=1 ;;
     --dry-run) DO_COMMIT=0 ;;
-    -h|--help) sed -n '3,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ไม่รู้จัก option: $1 (ดู --help)" >&2; exit 2 ;;
   esac
   shift
@@ -84,6 +92,25 @@ echo "    ได้ $COUNT workflow"
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_DIR"/*.json
 "${DC[@]}" cp "$N8N_SERVICE:$TMP_IN_CONTAINER/." "$OUT_DIR/"
+
+# ---- กรองเหลือเฉพาะ workflow ของโปรเจกต์นี้ -------------------------------
+# ตัด comment (# ...) ท้ายบรรทัดออกก่อน แล้วค่อยเทียบ id
+ALLOWLIST="$OUT_DIR/.allowed-ids"
+if [ -f "$ALLOWLIST" ]; then
+  ALLOWED="$(sed 's/#.*//' "$ALLOWLIST" | awk 'NF{print $1}')"
+  EXCLUDED=0
+  for f in "$OUT_DIR"/*.json; do
+    [ -e "$f" ] || continue
+    id="$(basename "$f" .json)"
+    if ! grep -qx "$id" <<< "$ALLOWED"; then
+      rm -f "$f"
+      EXCLUDED=$((EXCLUDED + 1))
+    fi
+  done
+  [ "$EXCLUDED" -gt 0 ] && echo "    กรอง workflow ที่ไม่อยู่ใน .allowed-ids ออก $EXCLUDED ตัว"
+else
+  echo "    หมายเหตุ: ไม่พบ $ALLOWLIST — เก็บ workflow ทุกตัวไว้ (ไม่กรอง)"
+fi
 
 if [ "$DO_COMMIT" -eq 0 ]; then
   echo "==> --dry-run: ข้ามการ commit"

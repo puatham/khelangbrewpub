@@ -1,0 +1,8 @@
+# workflow id (field "id" ในไฟล์ JSON) ที่เป็นของโปรเจกต์ ferment-agent
+# เท่านั้น — backup-workflows.sh จะเก็บเฉพาะตัวที่อยู่ในลิสต์นี้ ตัวอื่นบน
+# n8n instance เดียวกัน (ไฟล์ทดสอบ/workshop เก่า) จะถูกกรองทิ้งทุกรอบ backup
+#
+# สร้าง workflow ใหม่ของโปรเจกต์นี้เมื่อไหร่ ต้องเติม id ลงมาด้วย ไม่งั้น
+# backup รอบถัดไปจะกรองมันทิ้ง
+
+dfU7lACidEI47NeF   # Sync Devices (task #30)
