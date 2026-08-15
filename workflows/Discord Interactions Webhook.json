@@ -530,7 +530,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inItems = $input.all();\nconst created = $('Create Batch').first().json;\nconst rows = [];\ninItems.forEach((it) => {\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: created.pill_device_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? t.gravity / 1000 : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: created.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
+        "jsCode": "const inItems = $input.all();\nconst created = $('Create Batch').first().json;\nconst rows = [];\ninItems.forEach((it) => {\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: created.pill_device_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: created.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
