@@ -376,43 +376,6 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "WITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\nbatch_info AS (\n  SELECT b.batch_id, b.beer_name, b.start_date, b.temp_controller_device_id\n  FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active'\n  LIMIT 1\n),\nlatest_pill AS (\n  SELECT gravity_sg, temperature_c, time_utc FROM pill_readings\n  WHERE device_id = (SELECT device_id FROM pill_device)\n  ORDER BY time_utc DESC LIMIT 1\n),\nog_pill AS (\n  SELECT gravity_sg FROM pill_readings\n  WHERE device_id = (SELECT device_id FROM pill_device)\n    AND time_utc >= (SELECT start_date FROM batch_info)\n  ORDER BY time_utc ASC LIMIT 1\n),\nlatest_controller AS (\n  SELECT temperature_c, target_temperature_c, time_utc FROM temp_controller_readings\n  WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n  ORDER BY time_utc DESC LIMIT 1\n),\nlatest_phase AS (\n  SELECT detected_phase, ai_reasoning, checked_at FROM phase_log\n  WHERE batch_id = (SELECT batch_id FROM batch_info)\n  ORDER BY checked_at DESC LIMIT 1\n)\nSELECT\n  bi.batch_id, bi.beer_name,\n  lph.detected_phase, lph.ai_reasoning, lph.checked_at,\n  lp.gravity_sg, lp.temperature_c, lp.time_utc AS pill_time_utc,\n  og.gravity_sg AS og_sg,\n  lc.temperature_c AS controller_temp_c, lc.target_temperature_c, lc.time_utc AS controller_time_utc\nFROM batch_info bi\nLEFT JOIN latest_pill lp ON true\nLEFT JOIN og_pill og ON true\nLEFT JOIN latest_controller lc ON true\nLEFT JOIN latest_phase lph ON true;",
-        "options": {
-          "queryReplacement": "={{$json.pill}}"
-        }
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        1980,
-        300
-      ],
-      "id": "736ff25a-aadf-4798-bb7c-e37330d8b4b1",
-      "name": "Get Batch Status",
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      },
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst rows = $input.all();\n\nlet content;\nif (rows.length === 0 || rows[0].json.batch_id == null) {\n  content = '⚠️ ไม่พบ batch ที่ active อยู่สำหรับ Pill: ' + cmd.pill;\n} else {\n  const r = rows[0].json;\n\n  // คำนวณ ABV แบบ real-time จากข้อมูลสดตอนนี้ (ไม่ใช่ค่าที่ Phase Analysis\n  // Cron เคยคำนวณค้างไว้ ซึ่งอาจเก่าไปแล้วหลายสิบนาทีถึงหลายชั่วโมง)\n  const abvPercent = (r.og_sg != null && r.gravity_sg != null)\n    ? Number(((r.og_sg - r.gravity_sg) * 131.25).toFixed(2))\n    : null;\n\n  const pillTimeText = r.pill_time_utc\n    ? DateTime.fromISO(r.pill_time_utc).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm')\n    : 'ไม่มีข้อมูล';\n  const controllerTimeText = r.controller_time_utc\n    ? DateTime.fromISO(r.controller_time_utc).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm')\n    : 'ไม่มีข้อมูล';\n\n  let phaseSection;\n  if (r.detected_phase == null) {\n    phaseSection = 'ยังไม่มีข้อมูลวิเคราะห์เฟส (รอ Phase Analysis Cron รอบถัดไป)';\n  } else {\n    const checkedAt = DateTime.fromISO(r.checked_at).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm');\n    phaseSection = 'เฟสปัจจุบัน: ' + r.detected_phase + ' (วิเคราะห์ล่าสุดเมื่อ ' + checkedAt + ')\\n\\n' + (r.ai_reasoning || '');\n  }\n\n  content = '📊 สถานะการหมัก: ' + (r.beer_name || '(ไม่ระบุชื่อ)') + ' (Pill: ' + cmd.pill + ')\\n'\n    + 'gravity ล่าสุด: ' + (r.gravity_sg ?? 'ไม่มีข้อมูล') + ' SG (ณ ' + pillTimeText + ')\\n'\n    + 'อุณหภูมิ Pill: ' + (r.temperature_c ?? 'ไม่มีข้อมูล') + '°C\\n'\n    + 'อุณหภูมิตู้ควบคุม: ' + (r.controller_temp_c ?? 'ไม่มีข้อมูล') + '°C (target ' + (r.target_temperature_c ?? 'ไม่มีข้อมูล') + '°C, ณ ' + controllerTimeText + ')\\n'\n    + 'ABV โดยประมาณ (real-time): ' + (abvPercent ?? 'ไม่มีข้อมูล') + '%\\n\\n'\n    + phaseSection;\n}\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2200,
-        300
-      ],
-      "id": "2702d16a-a268-4565-b7c3-076aea1be7d3",
-      "name": "Build Status Message"
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "https://id.rapt.io/connect/token",
         "sendBody": true,
@@ -599,6 +562,211 @@
           "name": "Postgres account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\nbatch_info AS (\n  SELECT b.batch_id, b.beer_name, b.current_phase, b.prep_alerted_for_phase, b.start_date,\n         b.temp_controller_device_id, pd.device_id AS pill_id\n  FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active'\n  LIMIT 1\n),\ncontroller_info AS (\n  SELECT device_name AS controller_name FROM devices WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n),\npill_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'sg', gravity_sg, 'temp', temperature_c) ORDER BY time_utc ASC) AS series\n  FROM pill_readings WHERE device_id = (SELECT pill_id FROM batch_info)\n),\ncontroller_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series\n  FROM temp_controller_readings WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n)\nSELECT\n  bi.batch_id, bi.beer_name, bi.current_phase, bi.prep_alerted_for_phase, bi.start_date,\n  ci.controller_name,\n  COALESCE(ps.series, '[]'::jsonb) AS pill_series,\n  COALESCE(cs.series, '[]'::jsonb) AS controller_series\nFROM (SELECT 1) AS anchor\nLEFT JOIN batch_info bi ON true\nLEFT JOIN controller_info ci ON true\nLEFT JOIN pill_series ps ON true\nLEFT JOIN controller_series cs ON true;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1980,
+        300
+      ],
+      "id": "7bb7c259-297a-474c-95f1-bcab751f6e4d",
+      "name": "Get Batch For Analysis",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "10f12be1-4d7e-4d91-9d95-7ae95e28d7a1",
+              "leftValue": "={{ $json.batch_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ],
+      "id": "2644e2bc-cc4f-49fd-a453-1834e8e9e867",
+      "name": "Is Batch Found?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nreturn [{\n  json: {\n    content: '⚠️ ไม่พบ batch ที่ active อยู่สำหรับ Pill: ' + cmd.pill,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        400
+      ],
+      "id": "d560519a-8606-4b3c-91d2-0c61b763011a",
+      "name": "Build Not Found Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "const batch = $input.first().json;\n\nconst startDate = new Date(batch.start_date);\nconst hoursSinceStart = (Date.now() - startDate.getTime()) / 3600000;\n\nconst pillSeries = Array.isArray(batch.pill_series) ? batch.pill_series : [];\nconst controllerSeries = Array.isArray(batch.controller_series) ? batch.controller_series : [];\n\nconst latestPill = pillSeries.length ? pillSeries[pillSeries.length - 1] : null;\nconst latestController = controllerSeries.length ? controllerSeries[controllerSeries.length - 1] : null;\n\nlet loggedVelocity = null;\nif (pillSeries.length >= 2) {\n  const first = pillSeries[0], last = pillSeries[pillSeries.length - 1];\n  const hoursSpan = (new Date(last.t) - new Date(first.t)) / 3600000;\n  if (hoursSpan > 0 && first.sg != null && last.sg != null) {\n    loggedVelocity = (last.sg - first.sg) / (hoursSpan / 24);\n  }\n}\n\nconst pillSeriesText = pillSeries.length\n  ? pillSeries.map(p => `${p.t} | SG=${p.sg != null ? p.sg.toFixed(4) : '-'} | temp=${p.temp ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\nconst controllerSeriesText = controllerSeries.length\n  ? controllerSeries.map(p => `${p.t} | temp=${p.temp ?? '-'}°C | target=${p.target ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\n\nconst promptText = `คุณคือผู้เชี่ยวชาญการหมักเบียร์ (อ้างอิงหลักการจาก BJCP Yeast & Fermentation guide, John Palmer \"How to Brew\", Brew Your Own Fermentation Timeline) วิเคราะห์ว่า batch นี้อยู่เฟสไหนใน 6 เฟสนี้ โดยดูจาก \"กราฟ\" gravity/อุณหภูมิทั้งเส้นที่ให้ด้านล่าง (เรียงตามเวลา จากเก่าไปใหม่) ไม่ใช่แค่จุดเดียว:\n\n1. lag (0-24 ชม.แรกหลัง pitch): ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน กราฟ gravity แทบไม่ขยับจากค่าเริ่มต้น แทบไม่มีผลต่างอุณหภูมิระหว่าง pill กับตู้ควบคุม\n\n2. active_ferment (วันที่ 1-4, หนักสุดมักอยู่ใน 48-72 ชม.แรก): high krausen, กราฟ gravity ลาดชันลงเร็วที่สุดของทั้งเส้น, pill มักอุ่นกว่าตู้ควบคุมชัดเจน (2-5°C, ปฏิกิริยาคายความร้อน)\n\n3. slowing: กราฟ gravity เริ่มโค้งผ่อนความชันลงจากช่วงชันสุด แต่ยังลดต่อเนื่องชัดเจน (ไม่แบนราบ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง\n\n4. fg_stable: กราฟ gravity แบนราบต่อเนื่องอย่างน้อย 24-48 ชม. (ไม่ลดต่อแล้วอย่างมีนัยสำคัญ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมใกล้ 0\n   ⚠️ ถ้ากราฟแบนเร็วผิดปกติ (เช่นภายใน 2-3 วันแรก) หรือแบนที่ค่าซึ่งยังสูงมากเทียบกับช่วงต้นกราฟ อาจเป็น \"stuck fermentation\" ให้ระบุความสงสัยไว้ใน reasoning ด้วย (ไม่ต้องเปลี่ยน phase ที่ตอบ แค่เตือนไว้)\n\n5. diacetyl_rest: ต้องผ่าน fg_stable มาก่อน แล้วกราฟอุณหภูมิตู้ควบคุมยกขึ้นไปอยู่ช่วง 16-18°C ค้างไว้ 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่แม้ไม่บังคับ)\n\n6. cold_crash: ต้องผ่าน fg_stable (และปกติ diacetyl_rest) มาก่อน แล้วกราฟอุณหภูมิตู้ควบคุมลดลงเหลือ 0-4°C ค้างไว้ 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน)\n\nข้อมูล batch \"${batch.beer_name || '(ไม่ระบุชื่อ)'}\":\n- เริ่มหมักมาแล้ว: ${hoursSinceStart.toFixed(1)} ชั่วโมง (${(hoursSinceStart / 24).toFixed(1)} วัน)\n- เฟสล่าสุดที่บันทึกไว้: ${batch.current_phase}\n- target temperature ที่ตู้ควบคุมตั้งไว้ปัจจุบัน: ${latestController && latestController.target != null ? latestController.target : 'ไม่มีข้อมูล'}°C\n\nกราฟ gravity/อุณหภูมิ Pill ตามเวลา (${pillSeries.length} จุด, เรียงเก่า→ใหม่):\n${pillSeriesText}\n\nกราฟอุณหภูมิตู้ควบคุมตามเวลา (${controllerSeries.length} จุด, เรียงเก่า→ใหม่):\n${controllerSeriesText}\n\nตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปนก่อน/หลัง รูปแบบ:\n{\"phase\": \"<lag|active_ferment|slowing|fg_stable|diacetyl_rest|cold_crash>\", \"reasoning\": [\"<เหตุผลข้อที่ 1 สั้นๆ ภาษาไทย อ้างอิงข้อมูลที่ให้มาประกอบ>\", \"<เหตุผลข้อที่ 2>\", \"...\"]}\nreasoning ต้องเป็น array ของ string สั้นๆ ไม่เกิน 4 ข้อ แต่ละข้อคือประเด็นเดียว ไม่ใช่ paragraph ยาวๆ`;\n\nconst ogSg = pillSeries.length ? pillSeries[0].sg : null;\nconst currentSg = latestPill ? latestPill.sg : null;\nconst abvPercent = (ogSg != null && currentSg != null)\n  ? Number(((ogSg - currentSg) * 131.25).toFixed(2))\n  : null;\n\nreturn [{\n  json: {\n    batch_id: batch.batch_id,\n    beer_name: batch.beer_name,\n    current_phase: batch.current_phase,\n    prep_alerted_for_phase: batch.prep_alerted_for_phase,\n    gravity_sg: latestPill ? latestPill.sg : null,\n    temperature_c: latestPill ? latestPill.temp : null,\n    pill_time_utc: latestPill ? latestPill.t : null,\n    gravity_velocity: loggedVelocity,\n    controller_temp_c: latestController ? latestController.temp : null,\n    target_temperature_c: latestController ? latestController.target : null,\n    controller_time_utc: latestController ? latestController.t : null,\n    abv_percent: abvPercent,\n    prompt: promptText\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        200
+      ],
+      "id": "c519c54a-d579-4b4b-b176-d920189b5ecf",
+      "name": "Build Status Analysis Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "claude-sonnet-5"
+            },
+            {
+              "name": "max_tokens",
+              "value": "={{ 8192 }}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ [{role: 'user', content: $json.prompt}] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2640,
+        200
+      ],
+      "id": "5902f7a3-fb8d-45ee-874c-92f30ccb149f",
+      "name": "Call Claude (Status)",
+      "credentials": {
+        "anthropicApi": {
+          "id": "7SpL8QSQuPFtKCz3",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $('Build Status Analysis Prompt').first().json;\nconst claudeResponse = $input.first().json;\nlet phase = null, reasoning = null;\ntry {\n  const textBlock = (claudeResponse.content || []).find(c => c.type === 'text');\n  let text = textBlock ? textBlock.text : undefined;\n  if (text) {\n    text = text.trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  }\n  const parsed = JSON.parse(text);\n  phase = parsed.phase;\n  reasoning = Array.isArray(parsed.reasoning)\n    ? parsed.reasoning.map(line => '• ' + line).join('\\n')\n    : String(parsed.reasoning);\n} catch (e) {\n  phase = src.current_phase;\n  reasoning = 'AI response parse error: ' + String(e);\n}\n\nreturn [{\n  json: {\n    batch_id: src.batch_id,\n    beer_name: src.beer_name,\n    previous_phase: src.current_phase,\n    detected_phase: phase,\n    phase_changed: phase !== src.current_phase,\n    reasoning,\n    gravity_sg: src.gravity_sg,\n    temperature_c: src.temperature_c,\n    pill_time_utc: src.pill_time_utc,\n    gravity_velocity: src.gravity_velocity,\n    controller_temp_c: src.controller_temp_c,\n    target_temperature_c: src.target_temperature_c,\n    controller_time_utc: src.controller_time_utc,\n    abv_percent: src.abv_percent\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        200
+      ],
+      "id": "5f4f24d1-c5df-4ed0-aa45-48a77622cdb1",
+      "name": "Parse Status Analysis"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO phase_log (batch_id, gravity_sg, temperature_c, gravity_velocity, detected_phase, ai_reasoning, controller_temp_c, target_temperature_c, abv_percent)\nVALUES ($1, NULLIF($2, 'null')::numeric, NULLIF($3, 'null')::numeric, NULLIF($4, 'null')::numeric, $5, $6, NULLIF($7, 'null')::numeric, NULLIF($8, 'null')::numeric, NULLIF($9, 'null')::numeric);",
+        "options": {
+          "queryReplacement": "={{$json.batch_id}}, {{$json.gravity_sg}}, {{$json.temperature_c}}, {{$json.gravity_velocity}}, {{$json.detected_phase}}, {{$json.reasoning}}, {{$json.controller_temp_c}}, {{$json.target_temperature_c}}, {{$json.abv_percent}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3080,
+        200
+      ],
+      "id": "d947d45e-bd76-48f9-b668-9ec15e09bfc0",
+      "name": "Insert Analysis Log",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET current_phase = $1, prep_alerted_for_phase = CASE WHEN $3::boolean THEN NULL ELSE prep_alerted_for_phase END WHERE batch_id = $2;",
+        "options": {
+          "queryReplacement": "={{ $('Parse Status Analysis').first().json.detected_phase }}, {{ $('Parse Status Analysis').first().json.batch_id }}, {{ $('Parse Status Analysis').first().json.phase_changed }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3300,
+        200
+      ],
+      "id": "b20a9fbc-7caa-4090-98b3-a02e825d8632",
+      "name": "Update Batch Phase (Status)",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst r = $('Parse Status Analysis').first().json;\n\nconst pillTimeText = r.pill_time_utc\n  ? DateTime.fromISO(r.pill_time_utc).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm')\n  : 'ไม่มีข้อมูล';\nconst controllerTimeText = r.controller_time_utc\n  ? DateTime.fromISO(r.controller_time_utc).setZone('Asia/Bangkok').toFormat('d/M/yyyy HH:mm')\n  : 'ไม่มีข้อมูล';\n\nconst content = '📊 สถานะการหมัก: ' + (r.beer_name || '(ไม่ระบุชื่อ)') + ' (Pill: ' + cmd.pill + ')\\n'\n  + 'gravity ล่าสุด: ' + (r.gravity_sg ?? 'ไม่มีข้อมูล') + ' SG (ณ ' + pillTimeText + ')\\n'\n  + 'อุณหภูมิ Pill: ' + (r.temperature_c ?? 'ไม่มีข้อมูล') + '°C\\n'\n  + 'อุณหภูมิตู้ควบคุม: ' + (r.controller_temp_c ?? 'ไม่มีข้อมูล') + '°C (target ' + (r.target_temperature_c ?? 'ไม่มีข้อมูล') + '°C, ณ ' + controllerTimeText + ')\\n'\n  + 'ABV โดยประมาณ: ' + (r.abv_percent ?? 'ไม่มีข้อมูล') + '%\\n\\n'\n  + 'เฟส (วิเคราะห์สดตอนนี้): ' + r.detected_phase + (r.phase_changed ? ' (เปลี่ยนจาก ' + r.previous_phase + ')' : '') + '\\n\\n'\n  + r.reasoning;\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        200
+      ],
+      "id": "2edba1b7-6310-4c78-8014-ab6cf36d325a",
+      "name": "Build Status Message"
     }
   ],
   "connections": {
@@ -779,17 +947,6 @@
         []
       ]
     },
-    "Get Batch Status": {
-      "main": [
-        [
-          {
-            "node": "Build Status Message",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Build Status Message": {
       "main": [
         [
@@ -855,6 +1012,101 @@
         [
           {
             "node": "Insert Backfill Controller Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Batch For Analysis": {
+      "main": [
+        [
+          {
+            "node": "Is Batch Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Batch Found?": {
+      "main": [
+        [
+          {
+            "node": "Build Status Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Not Found Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Not Found Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call Claude (Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude (Status)": {
+      "main": [
+        [
+          {
+            "node": "Parse Status Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Status Analysis": {
+      "main": [
+        [
+          {
+            "node": "Insert Analysis Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Analysis Log": {
+      "main": [
+        [
+          {
+            "node": "Update Batch Phase (Status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Batch Phase (Status)": {
+      "main": [
+        [
+          {
+            "node": "Build Status Message",
             "type": "main",
             "index": 0
           }
