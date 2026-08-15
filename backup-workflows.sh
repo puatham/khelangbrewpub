@@ -28,6 +28,11 @@
 # กรองทิ้งทุกรอบ backup — ถ้าไฟล์ .allowed-ids ไม่มีอยู่เลย จะไม่กรอง (เก็บ
 # ทุก workflow ตามพฤติกรรมเดิม)
 #
+# n8n export ตั้งชื่อไฟล์เป็น workflow id ที่อ่านไม่รู้เรื่อง (เช่น
+# dfU7lACidEI47NeF.json) — หลังกรองแล้วสคริปต์จะเปลี่ยนชื่อไฟล์ตาม field
+# "name" ในตัว JSON ให้อัตโนมัติ (ต้องมี python3 บนเครื่อง) ถ้าเปลี่ยนชื่อ
+# workflow ใน n8n เอง ชื่อไฟล์ก็จะตามไปเองในรอบ backup ถัดไป
+#
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,7 +54,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --push)    DO_PUSH=1 ;;
     --dry-run) DO_COMMIT=0 ;;
-    -h|--help) sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ไม่รู้จัก option: $1 (ดู --help)" >&2; exit 2 ;;
   esac
   shift
@@ -110,6 +115,28 @@ if [ -f "$ALLOWLIST" ]; then
   [ "$EXCLUDED" -gt 0 ] && echo "    กรอง workflow ที่ไม่อยู่ใน .allowed-ids ออก $EXCLUDED ตัว"
 else
   echo "    หมายเหตุ: ไม่พบ $ALLOWLIST — เก็บ workflow ทุกตัวไว้ (ไม่กรอง)"
+fi
+
+# ---- ตั้งชื่อไฟล์ตาม field "name" แทน id ที่อ่านไม่รู้เรื่อง ---------------
+# ทำหลังกรองแล้วเท่านั้น กันไม่ให้ต้อง sanitize ชื่อ workflow แปลกๆ ของตัว
+# ที่ถูกกรองทิ้งไปแล้ว (เช่น workflow ทดสอบที่ตั้งชื่อมีอิโมจิ/อักขระพิเศษ)
+if command -v python3 >/dev/null 2>&1; then
+  for f in "$OUT_DIR"/*.json; do
+    [ -e "$f" ] || continue
+    safe_name="$(python3 -c '
+import json, sys
+name = json.load(open(sys.argv[1]))["name"]
+print(name.replace("/", "-").strip())
+' "$f" 2>/dev/null || true)"
+    [ -n "$safe_name" ] || continue
+    dest="$OUT_DIR/$safe_name.json"
+    if [ -e "$dest" ] && [ "$dest" != "$f" ]; then
+      dest="$OUT_DIR/$safe_name ($(basename "$f" .json)).json"
+    fi
+    [ "$dest" = "$f" ] || mv "$f" "$dest"
+  done
+else
+  echo "    หมายเหตุ: ไม่พบ python3 — เก็บชื่อไฟล์เป็น workflow id ไว้ (ไม่ตั้งชื่ออ่านง่าย)"
 fi
 
 if [ "$DO_COMMIT" -eq 0 ]; then
