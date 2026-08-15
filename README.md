@@ -270,7 +270,11 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 - Query ON CONFLICT ตอนแรกไม่ได้ update `device_type`
 - Header `Authorization` ใน HTTP Request node **ห้ามมี `=` นำหน้า** ถ้า field เป็น expression mode อยู่แล้ว (ใส่ซ้อนจะกลายเป็น literal text ทำให้ 401)
 
-### 8.2 "Discord Command Intake" — ✅ สร้างเสร็จ + ทดสอบผ่านแล้ว (start / stop / backdate ครบ)
+### 8.2 "Discord Command Intake" — 🔴 **เลิกใช้แล้ว (unpublish 15 ส.ค.)** ถูกแทนที่ด้วย 8.5
+
+คำสั่ง `!ferment start ...` / `!ferment stop ...` แบบ text ไม่ใช้แล้ว ให้ใช้ `/ferment_start` `/ferment_stop` `/ferment_status` (slash command, ข้อ 8.5) แทนทั้งหมด — workflow นี้ unpublish ไว้แล้ว (ไม่ได้ลบ เผื่อต้องอ้างอิงโค้ดย้อนหลัง) เนื้อหาด้านล่างเก็บไว้เป็นบันทึกประวัติ
+
+✅ สร้างเสร็จ + ทดสอบผ่านแล้ว (start / stop / backdate ครบ) — ตอนที่ยังใช้งานอยู่
 
 ต้องมีตาราง `bot_state` เก็บ `last_discord_message_id`
 
@@ -421,11 +425,12 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - #28 ตั้งค่า Discord bot — ✅ เสร็จ
 - #29 ใส่ credential ใน n8n — ✅ เสร็จ
 - #30 workflow sync devices — ✅ เสร็จ ทดสอบผ่าน
-- #31 workflow Discord command intake — ✅ เสร็จ ทดสอบผ่านครบ (start/stop/backdate) — 15 ส.ค.
-- #32 workflow cron วิเคราะห์เฟส — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
+- #31 workflow Discord command intake — 🔴 เลิกใช้แล้ว (unpublish 15 ส.ค.) ถูกแทนที่ด้วย #35 — ดูข้อ 8.2
+- #32 workflow cron วิเคราะห์เฟส — ✅ เสร็จ ทดสอบผ่าน + **publish/active จริงแล้ว** (เพิ่งพบว่าไม่เคย publish มาก่อน แก้ 15 ส.ค.)
 - #33 workflow รับคำสั่งปรับอุณหภูมิ — ❌ ยังไม่เริ่ม
 - #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 DB เพิ่งเคลียร์ล่าสุด 15 ส.ค. รอผู้ใช้เริ่มลงทะเบียน batch ใหม่ผ่าน `/ferment_start`
 - #35 Discord slash command (`/ferment_start`, `/ferment_stop`) — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
+- #36 `/ferment_status` + auto-resolve controller จาก RAPT pairing — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 
 ---
 
@@ -471,3 +476,18 @@ n8n มีฟีเจอร์ **Source Control** ที่ sync กับ Git 
 ```
 
 **ปลอดภัยไหม**: export ของ n8n เก็บ credential แค่ `id` กับ `name` ไม่มีค่า secret จริง จึงขึ้น git ได้ — แต่ **ห้ามรัน `n8n export:credentials --decrypted`** เด็ดขาด อันนั้นพ่นค่าจริงออกมาหมด
+
+---
+
+## 14. วิธีเริ่มใช้งานตั้งแต่ DB ว่างเปล่า (Quick Start)
+
+หลัง DB ถูกเคลียร์ (`devices`/`batches`/telemetry/`phase_log` ว่างหมด) ลำดับที่ต้องทำ:
+
+1. **รัน "Sync Devices"** (n8n → workflow นี้ → Execute workflow) — ดึงรายชื่อ Pill/Temperature Controller จาก RAPT เข้า `devices` table เป็นครั้งแรกหลังเคลียร์ ต้องทำก่อนเสมอ เพราะขั้นต่อไปอ้างอิง device ที่มีอยู่ใน DB
+2. **เช็คว่า Pill จับคู่ (pair) กับ Controller ไว้แล้วในแอป/เว็บ RAPT เอง** — ระบบเราดึง pairing นี้มาใช้อัตโนมัติ (`devices.raw_data->>'pairedDeviceId'`) ไม่ต้องระบุ controller เองตอนสั่ง start ถ้ายังไม่ได้ pair ต้องไปตั้งใน RAPT ก่อน แล้วรัน Sync Devices ใหม่อีกรอบให้ดึง pairing ล่าสุดมา
+3. **ลงทะเบียน batch ผ่าน Discord**: พิมพ์ `/ferment_start` เลือก `pill` (เช่น `Pill01`), `beer` (ชื่อเบียร์, บังคับใส่), `date` (วันเวลาเริ่มหมักจริง เช่น `12/8/2026 00:00`, บังคับใส่ — ถ้าหมักไปแล้วก่อนหน้าให้ใส่วันจริงย้อนหลังได้เลย ไม่ต้องรอ) — Controller จะ resolve ให้อัตโนมัติจากข้อ 2 บอทจะตอบยืนยันกลับพร้อมชื่อ Controller ที่ resolve ได้
+4. **"Phase Analysis Cron" รันอัตโนมัติทุก 30 นาทีอยู่แล้ว** (publish/active แล้ว — เพิ่งแก้ 15 ส.ค. ก่อนหน้านี้ไม่เคย publish จริง) ไม่ต้องทำอะไรเพิ่ม รอบแรกอาจจำแนกเป็น `lag` หรือ apparent attenuation ไม่แม่นยำนักถ้าเพิ่งเริ่มเก็บ telemetry (ดูหมายเหตุ OG proxy ในข้อ 8.3) จะแม่นขึ้นเมื่อมีข้อมูลสะสมข้าม cycle
+5. **เช็คสถานะได้ทุกเมื่อ**: พิมพ์ `/ferment_status pill:Pill01` (ใส่ชื่อ Pill ไม่ใช่ชื่อเบียร์) จะได้ผลวิเคราะห์ล่าสุดจาก cron รอบที่ผ่านมา (เฟส, gravity, อุณหภูมิ, เหตุผลจาก AI) โดยไม่ต้องรอ alert
+6. **หยุด batch เมื่อหมักเสร็จ**: พิมพ์ `/ferment_stop pill:Pill01`
+
+> `!ferment start/stop` แบบ text (ข้อ 8.2) **เลิกใช้แล้ว** ให้ใช้ `/ferment_start`/`/ferment_stop`/`/ferment_status` เท่านั้น
