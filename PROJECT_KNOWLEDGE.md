@@ -84,7 +84,11 @@ Auth: `POST https://id.rapt.io/connect/token` (form-urlencoded: `client_id=rapt-
 
 ## 5. Database Schema (Postgres) — สร้างครบแล้วบน VPS
 
-> ⚠️ **แก้จากที่เคยเข้าใจผิด** (15 ส.ค.): เอกสารเวอร์ชันก่อนบอกว่าสร้างครบ 7 ตารางแล้ว แต่เช็คของจริงบน VPS พบว่ามีแค่ 6 ตาราง — **`bot_state` ไม่เคยถูกสร้างจริง** (น่าจะตกหล่นตอน migrate หรือ session ก่อนไม่ได้รันจริง) สร้างให้แล้ววันนี้ด้วย DDL เดียวกับด้านล่าง ตอนนี้ครบ 7 ตารางแล้วจริง — สำคัญเพราะ workflow #31 Discord Command Intake ต้องใช้ตารางนี้โดยตรง
+> ⚠️ **แก้จากที่เคยเข้าใจผิด** (15 ส.ค.): เอกสารเวอร์ชันก่อนบอกว่าสร้างครบ 7 ตารางแล้ว แต่เช็คของจริงบน VPS พบว่ามีแค่ 6 ตาราง — **`bot_state` ไม่เคยถูกสร้างจริง** (น่าจะตกหล่นตอน migrate หรือ session ก่อนไม่ได้รันจริง) สร้างให้แล้ววันนี้ด้วย DDL เดียวกับด้านล่าง
+>
+> พบเพิ่มอีกจุดตอนทดสอบ `Create Batch` node จริง — error `column "beer_name" of relation "batches" does not exist` เช็คด้วย `\d batches` พบว่าตารางจริงมีแค่ 8 คอลัมน์ ขาด `beer_name` ไปเฉยๆ เพิ่มด้วย `ALTER TABLE batches ADD COLUMN beer_name TEXT;` แล้ว
+>
+> เช็คตารางที่เหลือทั้งหมด (`devices`, `pill_readings`, `temp_controller_readings`, `phase_log`, `control_log`) เทียบกับ `schema.sql` ทีละคอลัมน์แล้ว **ตรงกันหมด ไม่มีจุดอื่นขาด** — ตอนนี้ database จริงตรงกับ `schema.sql` 100%
 
 ```sql
 CREATE TABLE devices (
