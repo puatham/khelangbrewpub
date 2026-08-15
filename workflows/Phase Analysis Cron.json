@@ -297,7 +297,7 @@
             },
             {
               "name": "max_tokens",
-              "value": "={{ 4096 }}"
+              "value": "={{ 8192 }}"
             },
             {
               "name": "messages",
