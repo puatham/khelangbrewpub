@@ -1,0 +1,74 @@
+erDiagram
+    DEVICES ||--o{ BATCHES : "pill_device_id"
+    DEVICES ||--o{ BATCHES : "temp_controller_device_id"
+    DEVICES ||--o{ PILL_READINGS : "device_id"
+    DEVICES ||--o{ TEMP_CONTROLLER_READINGS : "device_id"
+    DEVICES ||--o{ CONTROL_LOG : "device_id"
+    BATCHES ||--o{ PHASE_LOG : "batch_id"
+
+    DEVICES {
+        uuid device_id PK
+        text device_name
+        text device_type
+        timestamptz last_synced_at
+        jsonb raw_data
+    }
+
+    BATCHES {
+        serial batch_id PK
+        uuid pill_device_id FK
+        uuid temp_controller_device_id FK
+        timestamptz start_date
+        numeric target_fg
+        text beer_name
+        text current_phase
+        timestamptz last_alert_at
+        text status
+    }
+
+    PILL_READINGS {
+        bigserial id PK
+        uuid device_id FK
+        timestamptz time_utc
+        numeric temperature_c
+        numeric gravity_sg
+        numeric gravity_velocity_sg_per_day
+        numeric battery_percent
+        numeric rssi_dbm
+        text paired_temp_controller
+    }
+
+    TEMP_CONTROLLER_READINGS {
+        bigserial id PK
+        uuid device_id FK
+        timestamptz time_utc
+        numeric temperature_c
+        numeric target_temperature_c
+        numeric rssi_dbm
+    }
+
+    PHASE_LOG {
+        serial log_id PK
+        int batch_id FK
+        timestamptz checked_at
+        numeric gravity_sg
+        numeric temperature_c
+        numeric gravity_velocity
+        text detected_phase
+        text ai_reasoning
+    }
+
+    CONTROL_LOG {
+        serial log_id PK
+        uuid device_id FK
+        text action
+        text old_value
+        text new_value
+        text changed_by
+        timestamptz changed_at
+    }
+
+    BOT_STATE {
+        text key PK
+        text value
+    }

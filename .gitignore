@@ -1,0 +1,8 @@
+# ค่า config จริง (มีรหัสผ่าน/API secret) — ห้ามขึ้น git
+.env
+
+# ข้อมูลจริงของ bind mount (n8n, postgres, traefik cert)
+data/
+
+# macOS
+.DS_Store
