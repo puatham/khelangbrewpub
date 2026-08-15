@@ -365,8 +365,8 @@
           "conditions": [
             {
               "id": "8068c227-9955-4846-855a-d4b964908343",
-              "leftValue": "={{ $('Parse AI Response').item.json.detected_phase }}",
-              "rightValue": "={{ $('Parse AI Response').item.json.previous_phase }}",
+              "leftValue": "={{ $('Parse AI Response').itemMatching($itemIndex).json.detected_phase }}",
+              "rightValue": "={{ $('Parse AI Response').itemMatching($itemIndex).json.previous_phase }}",
               "operator": {
                 "type": "string",
                 "operation": "notEquals"
@@ -398,7 +398,7 @@
           "parameters": [
             {
               "name": "content",
-              "value": "={{ '🔔 ' + $('Parse AI Response').item.json.beer_name + ': เฟสเปลี่ยนจาก ' + $('Parse AI Response').item.json.previous_phase + ' → ' + $('Parse AI Response').item.json.detected_phase + '\\n' + $('Parse AI Response').item.json.reasoning }}"
+              "value": "={{ '🔔 ' + $('Parse AI Response').itemMatching($itemIndex).json.beer_name + ': เฟสเปลี่ยนจาก ' + $('Parse AI Response').itemMatching($itemIndex).json.previous_phase + ' → ' + $('Parse AI Response').itemMatching($itemIndex).json.detected_phase + '\\n' + $('Parse AI Response').itemMatching($itemIndex).json.reasoning }}"
             }
           ]
         },
@@ -424,7 +424,7 @@
         "operation": "executeQuery",
         "query": "UPDATE batches SET current_phase = $1, last_alert_at = now() WHERE batch_id = $2;",
         "options": {
-          "queryReplacement": "={{ $('Parse AI Response').item.json.detected_phase }}, {{ $('Parse AI Response').item.json.batch_id }}"
+          "queryReplacement": "={{ $('Parse AI Response').itemMatching($itemIndex).json.detected_phase }}, {{ $('Parse AI Response').itemMatching($itemIndex).json.batch_id }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
