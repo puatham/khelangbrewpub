@@ -266,11 +266,25 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 - Query ON CONFLICT ตอนแรกไม่ได้ update `device_type` — เพิ่มเข้าไปแล้ว
 - Header `Authorization` ใน HTTP Request node **ห้ามมี `=` นำหน้า** ถ้า field เป็น expression mode อยู่แล้ว (ใส่ซ้อนจะกลายเป็น literal text ทำให้ 401) — เจอและแก้แล้ว
 
-**⚠️ ไฟล์ export ที่ได้มาขาด node `Save Pills`** (15 ส.ค.): `workflows/Sync Devices.json` ที่ export ออกมามีแค่ 7 node กิ่ง Pill จบที่ `Format Pills` แล้วตัน ไม่ต่อไป Postgres เลย — แปลว่าถ้า import ไฟล์นั้นไปใช้ จะบันทึกได้แค่ temp controller 2 ตัว Pill01/Pill02 จะไม่เข้าตาราง `devices`
+**⚠️ ไฟล์ export ที่ได้มาขาด node `Save Pills` — แต่ตัวจริงไม่ได้ขาด** (15 ส.ค.)
 
-แก้แล้วโดยเพิ่ม node `Save Pills` (Postgres, ใช้ query + credential ชุดเดียวกับ `Save Temp Controllers` เพราะ `device_type` ถูกกำหนดมาตั้งแต่ Code node แล้ว) และต่อ `Format Pills → Save Pills` ตอนนี้ไฟล์มี 8 node ครบตามออกแบบ
+`workflows/Sync Devices.json` ที่ export ออกมามีแค่ 7 node กิ่ง Pill จบที่ `Format Pills` แล้วตัน ไม่ต่อไป Postgres แต่พอไปเช็คฐานข้อมูลจริงบน VPS:
 
-**ยังไม่ได้ยืนยันว่าตัวจริงบน n8n ขาดด้วยหรือเปล่า** — เช็คด้วย `SELECT device_name, device_type FROM devices;` ถ้าได้ 4 แถวแปลว่าตัวจริงครบอยู่แล้ว (ไฟล์ export เก่า/ไม่สมบูรณ์) ถ้าได้ 2 แถวแปลว่าขาดจริง ต้อง import ทับ
+```
+ device_name |   device_type
+-------------+-----------------
+ Pill01      | pill
+ Pill02      | pill
+ Fridge      | temp_controller
+ Fridge2     | temp_controller
+(4 rows)
+```
+
+ได้ครบ 4 แถว = **workflow ตัวจริงบน n8n มี `Save Pills` อยู่แล้ว ทำงานถูกต้อง** ปัญหาอยู่ที่ไฟล์ export ไม่สมบูรณ์เท่านั้น (น่าจะ export ตอนยังต่อ node ไม่เสร็จ)
+
+ไฟล์ใน repo ถูกเติม node `Save Pills` ให้ครบ 8 node แล้ว (Postgres, query + credential ชุดเดียวกับ `Save Temp Controllers` เพราะ `device_type` ถูกกำหนดมาตั้งแต่ Code node) — แต่เป็นการ**สร้างขึ้นใหม่ให้เดาตรงกับของจริง ไม่ใช่ของจริง** ถ้าจะให้ไฟล์ตรงกับ n8n เป๊ะๆ ควร export ใหม่ด้วย `backup-workflows.sh`
+
+**อย่า import ไฟล์นี้ทับตัวจริง** โดยไม่จำเป็น — ตัวจริงทำงานอยู่แล้ว การ import ทับมีแต่ความเสี่ยงว่าจะเขียนทับสิ่งที่แก้ไว้แล้วแต่ไม่ได้อยู่ในไฟล์
 
 ### 8.2 "Discord Command Intake" — 🔧 ออกแบบไว้แล้ว กำลังสร้าง (ยังไม่ทดสอบจบ)
 
