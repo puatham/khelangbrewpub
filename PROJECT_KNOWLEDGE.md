@@ -299,6 +299,42 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 1. สร้าง credential ใหม่: Credentials → Add Credential → **Header Auth** → Name: `Authorization`, Value: `Bot <BOT_TOKEN>` (มีเว้นวรรคหลัง `Bot`) → ตั้งชื่อ credential เช่น `Discord Bot Header`
 2. ใน node `Get New Messages` และ `Send Confirmation`: Authentication → **Generic Credential Type** → Generic Auth Type → **Header Auth** → เลือก credential ที่สร้างไว้
 
+**⚠️ บั๊กที่ 2 เจอตอนทดสอบจริง (15 ส.ค.) และแก้แล้ว**: node `Parse Commands` error `messages is not iterable [line 6]` — โค้ดเดิมเขียน `const messages = $input.first().json;` โดยสมมติว่า `Get New Messages` ส่งมาเป็น **1 item ที่ข้างในเป็น array ข้อความทั้งหมด** (แบบเดียวกับที่ RAPT HTTP call ทำใน workflow Sync Devices) แต่ของจริง n8n เวอร์ชันนี้ (2.34.6 self-hosted) **แยก array ที่ Discord ส่งกลับมาเป็นคนละ item ให้อัตโนมัติ** (1 ข้อความ Discord = 1 item ไม่ใช่ 1 item ที่มี array ข้างใน) — ยืนยันจาก input panel ตอน debug เห็น field `content`/`id`/`channel_id` อยู่ตรงๆ ไม่ได้ห่อด้วย array
+
+แก้โดยเปลี่ยนไปวนลูปทีละ **item** ด้วย `$input.all()` แทนที่จะพยายามวนลูปทีละ element ใน array ที่ `$input.first().json`:
+```javascript
+const items = $input.all();
+const results = [];
+let maxId = $('Get Last Message Id').first().json.value;
+const paramRegex = /(\w+)=(?:"([^"]*)"|(\S+))/g;
+
+for (const item of items) {
+  const m = item.json;
+  const text = (m.content || '').trim();
+  const match = text.match(/^!ferment\s+(start|stop)\s+(.*)$/i);
+  if (match) {
+    const action = match[1].toLowerCase();
+    const params = {};
+    let pm;
+    paramRegex.lastIndex = 0;
+    while ((pm = paramRegex.exec(match[2])) !== null) {
+      params[pm[1]] = pm[2] !== undefined ? pm[2] : pm[3];
+    }
+    results.push({ json: { action, ...params, message_id: m.id } });
+  }
+  if (BigInt(m.id) > BigInt(maxId)) maxId = m.id;
+}
+
+if (results.length === 0) {
+  results.push({ json: { action: 'none', maxId } });
+} else {
+  results.forEach(r => r.json.maxId = maxId);
+}
+return results;
+```
+
+ไฟล์ `Discord Command Intake.json` ใน repo แก้ตามนี้แล้ว
+
 ไฟล์ `Discord Command Intake.json` ใน repo แก้ตามนี้แล้ว (`authentication: genericCredentialType`, `genericAuthType: httpHeaderAuth`) — ถ้า import ใหม่จะไม่เจอปัญหานี้อีก แต่ credential ยังต้องเลือกเองหลัง import เสมอ (ผมไม่มีทางรู้ credential id ล่วงหน้า)
 
 Node structure:
