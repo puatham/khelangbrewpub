@@ -296,7 +296,9 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 
 ต้องมีตาราง `bot_state` เก็บ `last_discord_message_id` (สร้างแล้ว)
 
-**⚠️ บั๊กที่เจอตอน import (15 ส.ค.) และแก้แล้ว**: node `Get New Messages` / `Send Confirmation` ตั้ง `authentication: predefinedCredentialType` + `nodeCredentialType: discordApi` ไว้ แต่พอ import เข้า n8n จริง ช่อง "Credential Type" ขึ้นเป็น `discordApi` ตัวพิมพ์เล็กดิบๆ (ไม่ใช่ชื่อสวยแบบ "Postgres" ที่ n8n ปกติแสดง) และไม่มีช่องให้เลือก credential โผล่มาเลย → error "Credentials not found" แปลว่า `discordApi` ไม่ใช่ credential type ที่รองรับ Predefined Credential Type บน HTTP Request node ของ instance นี้
+**⚠️ บั๊กที่เจอตอน import (15 ส.ค.) และแก้แล้ว**: node `Get New Messages` / `Send Confirmation` ตั้ง `authentication: predefinedCredentialType` + `nodeCredentialType: discordApi` ไว้ แต่พอ import เข้า n8n จริง ช่อง "Credential Type" ขึ้นเป็น `discordApi` ตัวพิมพ์เล็กดิบๆ (ไม่ใช่ชื่อสวยแบบ "Postgres" ที่ n8n ปกติแสดง) และไม่มีช่องให้เลือก credential โผล่มาเลย → error "Credentials not found"
+
+**ชื่อ credential type ที่ถูกต้องจริงๆ คือ `discordBotApi`** (ไม่ใช่ `discordApi` ที่ผมเดาผิดตอนแรก) — ยืนยันแล้วว่าใช้ได้จริง หลังเปลี่ยนไปใช้ `nodeCredentialType: discordBotApi` ช่องเลือก credential โผล่มาปกติ เลือก "Discord Bot account" ที่มีอยู่แล้วได้เลย ไม่ต้องสร้าง Header Auth เพิ่ม (ทางเลือก Header Auth ที่แนะนำไว้ก่อนหน้ายังใช้ได้เป็น fallback ถ้าไปเจอ n8n instance อื่นที่ไม่มี `discordBotApi` เป็นตัวเลือก) ไฟล์ `Discord Command Intake.json` ใน repo แก้เป็น `discordBotApi` แล้ว
 
 **แก้โดยเปลี่ยนไปใช้ Generic Credential Type → Header Auth แทน** (เรียก Discord REST API ตรงๆ ด้วย header `Authorization: Bot <TOKEN>` ซึ่งใช้ได้แน่นอนไม่ต้องพึ่ง credential type เฉพาะของ Discord):
 
