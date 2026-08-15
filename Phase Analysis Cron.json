@@ -333,7 +333,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO phase_log (batch_id, gravity_sg, temperature_c, gravity_velocity, detected_phase, ai_reasoning)\nVALUES ($1, $2, $3, $4, $5, $6);",
+        "query": "INSERT INTO phase_log (batch_id, gravity_sg, temperature_c, gravity_velocity, detected_phase, ai_reasoning)\nVALUES ($1, NULLIF($2, 'null')::numeric, NULLIF($3, 'null')::numeric, NULLIF($4, 'null')::numeric, $5, $6);",
         "options": {
           "queryReplacement": "={{$json.batch_id}}, {{$json.gravity_sg}}, {{$json.temperature_c}}, {{$json.gravity_velocity}}, {{$json.detected_phase}}, {{$json.reasoning}}"
         }
