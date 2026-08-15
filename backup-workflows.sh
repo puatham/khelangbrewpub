@@ -11,14 +11,26 @@
 #   ./backup-workflows.sh --push       export + commit + push ขึ้น GitHub
 #   ./backup-workflows.sh --dry-run    export มาดูเฉยๆ ไม่ commit
 #
+# ถ้า repo นี้ถูก clone ไว้เป็นโฟลเดอร์ย่อยของ deployment จริง (เช่น
+# /docker/ferment-agent/repo/) docker compose project name ที่เดาจาก
+# basename จะไม่ตรงกับของจริง (ferment-agent) ตั้งค่าเองได้ด้วย:
+#   COMPOSE_PROJECT_NAME=ferment-agent ./backup-workflows.sh
+# (ค่า default คือ ferment-agent อยู่แล้ว ปกติไม่ต้องตั้งเอง)
+#
 # ตั้ง cron ให้ backup ทุกวันตี 3:
-#   0 3 * * * /docker/ferment-agent/backup-workflows.sh --push >> /var/log/n8n-backup.log 2>&1
+#   0 3 * * * /docker/ferment-agent/repo/backup-workflows.sh --push >> /var/log/n8n-backup.log 2>&1
 #
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="$REPO_ROOT/workflows"
 N8N_SERVICE="${N8N_SERVICE:-n8n}"
+# ชื่อ compose project ของ stack ที่รันอยู่จริง — ถ้า repo นี้ถูก clone ไว้เป็น
+# โฟลเดอร์ย่อยของ deployment จริง (เช่น /docker/ferment-agent/repo/) ชื่อ
+# project ที่ docker compose เดาจาก basename ของโฟลเดอร์นี้จะไม่ตรงกับของจริง
+# ระบุตรงๆ กันพลาด
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-ferment-agent}"
+DC=(docker compose -p "$COMPOSE_PROJECT_NAME")
 # โฟลเดอร์ชั่วคราวใน container (ไม่ยุ่งกับ /files ที่ mount ไว้ใช้งานอย่างอื่น)
 TMP_IN_CONTAINER="/tmp/n8n-export-$$"
 
@@ -29,7 +41,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --push)    DO_PUSH=1 ;;
     --dry-run) DO_COMMIT=0 ;;
-    -h|--help) sed -n '3,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ไม่รู้จัก option: $1 (ดู --help)" >&2; exit 2 ;;
   esac
   shift
@@ -44,20 +56,20 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
 docker compose version >/dev/null 2>&1 \
   || { echo "ผิดพลาด: ไม่พบ 'docker compose' บนเครื่องนี้" >&2; exit 1; }
 
-docker compose ps --status running --services 2>/dev/null | grep -qx "$N8N_SERVICE" \
-  || { echo "ผิดพลาด: service '$N8N_SERVICE' ไม่ได้รันอยู่ (ลอง: docker compose up -d)" >&2; exit 1; }
+"${DC[@]}" ps --status running --services 2>/dev/null | grep -qx "$N8N_SERVICE" \
+  || { echo "ผิดพลาด: ไม่พบ service '$N8N_SERVICE' ที่รันอยู่ใน compose project '$COMPOSE_PROJECT_NAME' (ลอง: docker compose up -d หรือกำหนด COMPOSE_PROJECT_NAME ให้ตรงกับของจริง)" >&2; exit 1; }
 
 # ---- export ออกมาก่อน ----------------------------------------------------
 # เขียนลง /tmp ใน container ก่อน แล้วค่อย copy ออก ถ้า export พังจะได้ไม่ไป
 # แตะไฟล์เดิมใน repo เลย
-cleanup() { docker compose exec -T "$N8N_SERVICE" rm -rf "$TMP_IN_CONTAINER" >/dev/null 2>&1 || true; }
+cleanup() { "${DC[@]}" exec -T "$N8N_SERVICE" rm -rf "$TMP_IN_CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "==> export workflow จาก n8n ..."
-docker compose exec -T "$N8N_SERVICE" \
+"${DC[@]}" exec -T "$N8N_SERVICE" \
   n8n export:workflow --all --separate --output="$TMP_IN_CONTAINER"
 
-COUNT="$(docker compose exec -T "$N8N_SERVICE" \
+COUNT="$("${DC[@]}" exec -T "$N8N_SERVICE" \
   sh -c "ls -1 $TMP_IN_CONTAINER/*.json 2>/dev/null | wc -l" | tr -d '[:space:]')"
 
 if [ "${COUNT:-0}" -eq 0 ]; then
@@ -71,7 +83,7 @@ echo "    ได้ $COUNT workflow"
 # (ทำตรงนี้เพราะ export สำเร็จแล้ว ถึงจุดนี้ข้อมูลใหม่อยู่ในมือแน่นอน)
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_DIR"/*.json
-docker compose cp "$N8N_SERVICE:$TMP_IN_CONTAINER/." "$OUT_DIR/"
+"${DC[@]}" cp "$N8N_SERVICE:$TMP_IN_CONTAINER/." "$OUT_DIR/"
 
 if [ "$DO_COMMIT" -eq 0 ]; then
   echo "==> --dry-run: ข้ามการ commit"
