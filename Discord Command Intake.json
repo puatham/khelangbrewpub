@@ -1,0 +1,275 @@
+{
+  "name": "Discord Command Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "91183e51-e925-4801-a2a9-545e8f00f9cb",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT value FROM bot_state WHERE key = 'last_discord_message_id';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [220, 0],
+      "id": "b0fdb609-02b3-4c04-835d-edf472d168e7",
+      "name": "Get Last Message Id",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://discord.com/api/v10/channels/<CHANNEL_ID>/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "after",
+              "value": "={{ $json.value }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [440, 0],
+      "id": "5a61c4b6-f539-4b53-be78-9cd7af9cb59a",
+      "name": "Get New Messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "const messages = $input.first().json;\nconst results = [];\nlet maxId = $('Get Last Message Id').first().json.value;\nconst paramRegex = /(\\w+)=(?:\"([^\"]*)\"|(\\S+))/g;\n\nfor (const m of messages) {\n  const text = (m.content || '').trim();\n  const match = text.match(/^!ferment\\s+(start|stop)\\s+(.*)$/i);\n  if (match) {\n    const action = match[1].toLowerCase();\n    const params = {};\n    let pm;\n    paramRegex.lastIndex = 0;\n    while ((pm = paramRegex.exec(match[2])) !== null) {\n      params[pm[1]] = pm[2] !== undefined ? pm[2] : pm[3];\n    }\n    results.push({ json: { action, ...params, message_id: m.id } });\n  }\n  if (BigInt(m.id) > BigInt(maxId)) maxId = m.id;\n}\n\nif (results.length === 0) {\n  results.push({ json: { action: 'none', maxId } });\n} else {\n  results.forEach(r => r.json.maxId = maxId);\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "9f2618ee-1374-4836-af5a-34605e8d8426",
+      "name": "Parse Commands"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "62f36610-861b-4d69-8af2-bc0dc3790864",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "d32addfe-5f2e-4796-bd8a-b017be5e63ab",
+      "name": "Is Start?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status)\nSELECT\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1),\n  (SELECT device_id FROM devices WHERE trim(device_name) = trim($2) AND device_type = 'temp_controller' LIMIT 1),\n  now(),\n  $3,\n  'active'\nRETURNING batch_id;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}, {{$json.controller}}, {{$json.beer || null}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [1100, -140],
+      "id": "d4d3cf1b-8bd6-47e3-830e-90de04fea403",
+      "name": "Create Batch",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "3c4b94a2-8c44-499e-93f7-3aad669beb1f",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "stop",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 140],
+      "id": "43014c6e-b41c-49fd-b3e7-bb52d40214ff",
+      "name": "Is Stop?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE batches SET status = 'done'\nWHERE pill_device_id = (SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1)\nAND status = 'active';",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [1320, 200],
+      "id": "980cb9ff-f1eb-41e7-a087-a4989d133bff",
+      "name": "Stop Batch",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/<CHANNEL_ID>/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordApi",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $('Parse Commands').item.json.action === 'start' ? ('✅ เริ่ม batch: ' + ($('Parse Commands').item.json.beer || '(ไม่ระบุชื่อเบียร์)') + '\\nPill: ' + $('Parse Commands').item.json.pill + ' ↔ Controller: ' + $('Parse Commands').item.json.controller) : ('⏹️ หยุด batch ของ Pill: ' + $('Parse Commands').item.json.pill) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [1540, 0],
+      "id": "11f10a52-d3e5-49e7-b980-1feb426306e6",
+      "name": "Send Confirmation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_state SET value = $1 WHERE key = 'last_discord_message_id';",
+        "options": {
+          "queryReplacement": "={{ $('Parse Commands').item.json.maxId }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [1760, 0],
+      "id": "81da6a64-f721-4359-a760-e1e77b7d8f62",
+      "name": "Update Last Message Id",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Get Last Message Id", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Last Message Id": {
+      "main": [
+        [{ "node": "Get New Messages", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get New Messages": {
+      "main": [
+        [{ "node": "Parse Commands", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Commands": {
+      "main": [
+        [{ "node": "Is Start?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [{ "node": "Create Batch", "type": "main", "index": 0 }],
+        [{ "node": "Is Stop?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Batch": {
+      "main": [
+        [{ "node": "Send Confirmation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Stop?": {
+      "main": [
+        [{ "node": "Stop Batch", "type": "main", "index": 0 }],
+        [{ "node": "Update Last Message Id", "type": "main", "index": 0 }]
+      ]
+    },
+    "Stop Batch": {
+      "main": [
+        [{ "node": "Send Confirmation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [{ "node": "Update Last Message Id", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
