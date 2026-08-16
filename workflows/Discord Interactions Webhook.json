@@ -187,7 +187,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst action = name === 'ferment_start' ? 'start' : (name === 'ferment_stop' ? 'stop' : (name === 'ferment_status' ? 'status' : 'unknown'));\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    controller: params.controller,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -566,7 +566,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\nbatch_info AS (\n  SELECT b.batch_id, b.beer_name, b.current_phase, b.prep_alerted_for_phase, b.start_date,\n         b.temp_controller_device_id, pd.device_id AS pill_id\n  FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active'\n  LIMIT 1\n),\ncontroller_info AS (\n  SELECT device_name AS controller_name FROM devices WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n),\npill_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'sg', gravity_sg, 'temp', temperature_c) ORDER BY time_utc ASC) AS series\n  FROM pill_readings WHERE device_id = (SELECT pill_id FROM batch_info)\n),\ncontroller_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series\n  FROM temp_controller_readings WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n)\nSELECT\n  bi.batch_id::text AS batch_id, bi.beer_name, bi.current_phase, bi.prep_alerted_for_phase, bi.start_date,\n  ci.controller_name,\n  COALESCE(ps.series, '[]'::jsonb) AS pill_series,\n  COALESCE(cs.series, '[]'::jsonb) AS controller_series\nFROM (SELECT 1) AS anchor\nLEFT JOIN batch_info bi ON true\nLEFT JOIN controller_info ci ON true\nLEFT JOIN pill_series ps ON true\nLEFT JOIN controller_series cs ON true;",
+        "query": "WITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\nbatch_info AS (\n  SELECT b.batch_id, b.beer_name, b.current_phase, b.prep_alerted_for_phase, b.start_date,\n         b.temp_controller_device_id, pd.device_id AS pill_id\n  FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active'\n  LIMIT 1\n),\ncontroller_info AS (\n  SELECT device_name AS controller_name FROM devices WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n),\npill_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'sg', gravity_sg, 'temp', temperature_c) ORDER BY time_utc ASC) AS series\n  FROM pill_readings WHERE device_id = (SELECT pill_id FROM batch_info)\n),\ncontroller_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series\n  FROM temp_controller_readings WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n),\ncontrol_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', changed_at, 'old', old_value, 'new', new_value, 'by', changed_by, 'remark', remark) ORDER BY changed_at ASC) AS series\n  FROM control_log\n  WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n    AND action = 'set_target_temperature'\n    AND changed_at >= (SELECT start_date FROM batch_info)\n)\nSELECT\n  bi.batch_id::text AS batch_id, bi.beer_name, bi.current_phase, bi.prep_alerted_for_phase, bi.start_date,\n  ci.controller_name,\n  COALESCE(ps.series, '[]'::jsonb) AS pill_series,\n  COALESCE(cs.series, '[]'::jsonb) AS controller_series,\n  COALESCE(ctl.series, '[]'::jsonb) AS control_series\nFROM (SELECT 1) AS anchor\nLEFT JOIN batch_info bi ON true\nLEFT JOIN controller_info ci ON true\nLEFT JOIN pill_series ps ON true\nLEFT JOIN controller_series cs ON true\nLEFT JOIN control_series ctl ON true;",
         "options": {
           "queryReplacement": "={{$json.pill}}"
         },
@@ -635,7 +635,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const batch = $input.first().json;\n\nconst startDate = new Date(batch.start_date);\nconst hoursSinceStart = (Date.now() - startDate.getTime()) / 3600000;\n\nconst pillSeries = Array.isArray(batch.pill_series) ? batch.pill_series : [];\nconst controllerSeries = Array.isArray(batch.controller_series) ? batch.controller_series : [];\n\nconst latestPill = pillSeries.length ? pillSeries[pillSeries.length - 1] : null;\nconst latestController = controllerSeries.length ? controllerSeries[controllerSeries.length - 1] : null;\n\n// อุณหภูมิหมักจริงของ batch นี้ (เฉลี่ยจาก Pill ช่วง 72 ชม.แรก) ใช้เป็น\n// baseline เทียบแบบสัมพัทธ์ แทนเลของศาตายตัว เพราะแต่ละ batch/ยีสต์หมัก\n// ที่อุณหภูมิไม่เท่ากัน\nconst fermentationTempPoints = pillSeries.filter(p => {\n  const hoursSincePoint = (new Date(p.t) - startDate) / 3600000;\n  return hoursSincePoint >= 0 && hoursSincePoint <= 72 && p.temp != null;\n});\nconst fermentationBaselineTemp = fermentationTempPoints.length\n  ? Number((fermentationTempPoints.reduce((sum, p) => sum + p.temp, 0) / fermentationTempPoints.length).toFixed(2))\n  : null;\n\nlet loggedVelocity = null;\nif (pillSeries.length >= 2) {\n  const first = pillSeries[0], last = pillSeries[pillSeries.length - 1];\n  const hoursSpan = (new Date(last.t) - new Date(first.t)) / 3600000;\n  if (hoursSpan > 0 && first.sg != null && last.sg != null) {\n    loggedVelocity = (last.sg - first.sg) / (hoursSpan / 24);\n  }\n}\n\nconst pillSeriesText = pillSeries.length\n  ? pillSeries.map(p => `${p.t} | SG=${p.sg != null ? p.sg.toFixed(4) : '-'} | temp=${p.temp ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\nconst controllerSeriesText = controllerSeries.length\n  ? controllerSeries.map(p => `${p.t} | temp=${p.temp ?? '-'}°C | target=${p.target ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\n\nconst promptText = `คุณคือผู้เชี่ยวชาญการหมักเบียร์ (อ้างอิงหลักการจาก BJCP Yeast & Fermentation guide, John Palmer \"How to Brew\", Brew Your Own Fermentation Timeline) วิเคราะห์ว่า batch นี้อยู่เฟสไหนใน 6 เฟสนี้ โดยดูจาก \"กราฟ\" gravity/อุณหภูมิทั้งเส้นที่ให้ด้านล่าง (เรียงตามเวลา จากเก่าไปใหม่) ไม่ใช่แค่จุดเดียว:\n\n1. lag (0-24 ชม.แรกหลัง pitch): ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน กราฟ gravity แทบไม่ขยับจากค่าเริ่มต้น แทบไม่มีผลต่างอุณหภูมิระหว่าง pill กับตู้ควบคุม\n\n2. active_ferment (วันที่ 1-4, หนักสุดมักอยู่ใน 48-72 ชม.แรก): high krausen, กราฟ gravity ลาดชันลงเร็วที่สุดของทั้งเส้น, pill มักอุ่นกว่าตู้ควบคุมชัดเจน (2-5°C, ปฏิกิริยาคายความร้อน)\n\n3. slowing: กราฟ gravity เริ่มโค้งผ่อนความชันลงจากช่วงชันสุด แต่ยังลดต่อเนื่องชัดเจน (ไม่แบนราบ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง\n\n4. fg_stable: กราฟ gravity แบนราบต่อเนื่องอย่างน้อย 24-48 ชม. (ไม่ลดต่อแล้วอย่างมีนัยสำคัญ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมใกล้ 0\n   ⚠️ ถ้ากราฟแบนเร็วผิดปกติ (เช่นภายใน 2-3 วันแรก) หรือแบนที่ค่าซึ่งยังสูงมากเทียบกับช่วงต้นกราฟ อาจเป็น \"stuck fermentation\" ให้ระบุความสงสัยไว้ใน reasoning ด้วย (ไม่ต้องเปลี่ยน phase ที่ตอบ แค่เตือนไว้)\n\n5. diacetyl_rest: ต้องผ่าน fg_stable มาก่อน แล้ว \"อุณหภูมิ Pill\" (เบียร์จริง ไม่ใช่อุณหภูมิตู้ควบคุม) ถูกยกขึ้นจาก \"อุณหภูมิหมักปกติของ batch นี้\" (ดูค่าที่ให้ไว้ด้านล่าง) ประมาณ +2 ถึง +4°C ค้างไว้ 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่แม้ไม่บังคับ) — **นี่คือช่วงสัมพัทธ์ ไม่ใช่ตัวเลของศาตายตัว** เพราะแต่ละ batch/ยีสต์หมักที่อุณหภูมิต่างกัน (เช่น batch ที่หมักปกติ 18°C แล้วยกไป 20-22°C ก็นับเป็น diacetyl_rest ได้ ไม่จำเป็นต้องอยู่ในช่วง 16-18°C แบบตายตัว) ใช้อุณหภูมิ Pill ตัดสินเป็นหลักเสมอ ส่วน target/อุณหภูมิตู้ควบคุมเป็นแค่ข้อมูลเสริมว่าตู้กำลังพยายามไล่ตามคำสั่งอยู่หรือยัง (ห้ามใช้แค่ target/ตู้ยังไม่ถึงมาสรุปว่ายังไม่เข้า diacetyl_rest ทั้งที่ Pill เองถึงแล้ว)\n\n6. cold_crash: ต้องผ่าน fg_stable (และปกติ diacetyl_rest) มาก่อน แล้ว \"อุณหภูมิ Pill\" (เบียร์จริง) ลดลงเหลือ 0-4°C ค้างไว้ 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน) — ใช้อุณหภูมิ Pill ตัดสินเป็นหลักเช่นเดียวกับข้อ 5\n\nข้อมูล batch \"${batch.beer_name || '(ไม่ระบุชื่อ)'}\":\n- เริ่มหมักมาแล้ว: ${hoursSinceStart.toFixed(1)} ชั่วโมง (${(hoursSinceStart / 24).toFixed(1)} วัน)\n- เฟสล่าสุดที่บันทึกไว้: ${batch.current_phase}\n- อุณหภูมิ Pill (เบียร์จริง) ล่าสุด: ${latestPill && latestPill.temp != null ? latestPill.temp : 'ไม่มีข้อมูล'}°C ← ใช้ตัวนี้ตัดสิน diacetyl_rest/cold_crash เป็นหลัก\n- อุณหภูมิหมักปกติของ batch นี้ (เฉลี่ย Pill ช่วง 72 ชม.แรก): ${fermentationBaselineTemp ?? 'ไม่มีข้อมูล'}°C ← baseline สำหรับเทียบว่ายกขึ้น +2 ถึง +4°C แล้วหรือยัง (diacetyl_rest)\n- อุณหภูมิตู้ควบคุมล่าสุด: ${latestController && latestController.temp != null ? latestController.temp : 'ไม่มีข้อมูล'}°C (ข้อมูลเสริมเท่านั้น)\n- target temperature ที่ตู้ควบคุมตั้งไว้ปัจจุบัน: ${latestController && latestController.target != null ? latestController.target : 'ไม่มีข้อมูล'}°C\n\nกราฟ gravity/อุณหภูมิ Pill ตามเวลา (${pillSeries.length} จุด, เรียงเก่า→ใหม่):\n${pillSeriesText}\n\nกราฟอุณหภูมิตู้ควบคุมตามเวลา (${controllerSeries.length} จุด, เรียงเก่า→ใหม่):\n${controllerSeriesText}\n\nตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปนก่อน/หลัง รูปแบบ:\n{\"phase\": \"<lag|active_ferment|slowing|fg_stable|diacetyl_rest|cold_crash>\", \"reasoning\": [\"<เหตุผลข้อที่ 1 สั้นๆ ภาษาไทย อ้างอิงข้อมูลที่ให้มาประกอบ>\", \"<เหตุผลข้อที่ 2>\", \"...\"]}\nreasoning ต้องเป็น array ของ string สั้นๆ ไม่เกิน 4 ข้อ แต่ละข้อคือประเด็นเดียว ไม่ใช่ paragraph ยาวๆ`;\n\nconst ogSg = pillSeries.length ? pillSeries[0].sg : null;\nconst currentSg = latestPill ? latestPill.sg : null;\nconst abvPercent = (ogSg != null && currentSg != null)\n  ? Number(((ogSg - currentSg) * 131.25).toFixed(2))\n  : null;\n\nreturn [{\n  json: {\n    batch_id: batch.batch_id,\n    beer_name: batch.beer_name,\n    current_phase: batch.current_phase,\n    prep_alerted_for_phase: batch.prep_alerted_for_phase,\n    gravity_sg: latestPill ? latestPill.sg : null,\n    temperature_c: latestPill ? latestPill.temp : null,\n    pill_time_utc: latestPill ? latestPill.t : null,\n    gravity_velocity: loggedVelocity,\n    controller_temp_c: latestController ? latestController.temp : null,\n    target_temperature_c: latestController ? latestController.target : null,\n    controller_time_utc: latestController ? latestController.t : null,\n    abv_percent: abvPercent,\n    prompt: promptText\n  }\n}];"
+        "jsCode": "const batch = $input.first().json;\n\nconst startDate = new Date(batch.start_date);\nconst hoursSinceStart = (Date.now() - startDate.getTime()) / 3600000;\n\nconst pillSeries = Array.isArray(batch.pill_series) ? batch.pill_series : [];\nconst controllerSeries = Array.isArray(batch.controller_series) ? batch.controller_series : [];\nconst controlSeries = Array.isArray(batch.control_series) ? batch.control_series : [];\n\nconst latestPill = pillSeries.length ? pillSeries[pillSeries.length - 1] : null;\nconst latestController = controllerSeries.length ? controllerSeries[controllerSeries.length - 1] : null;\n\n// อุณหภูมิหมักจริงของ batch นี้ (เฉลี่ยจาก Pill ช่วง 72 ชม.แรก) ใช้เป็น\n// baseline เทียบแบบสัมพัทธ์ แทนเลของศาตายตัว เพราะแต่ละ batch/ยีสต์หมัก\n// ที่อุณหภูมิไม่เท่ากัน\nconst fermentationTempPoints = pillSeries.filter(p => {\n  const hoursSincePoint = (new Date(p.t) - startDate) / 3600000;\n  return hoursSincePoint >= 0 && hoursSincePoint <= 72 && p.temp != null;\n});\nconst fermentationBaselineTemp = fermentationTempPoints.length\n  ? Number((fermentationTempPoints.reduce((sum, p) => sum + p.temp, 0) / fermentationTempPoints.length).toFixed(2))\n  : null;\n\nlet loggedVelocity = null;\nif (pillSeries.length >= 2) {\n  const first = pillSeries[0], last = pillSeries[pillSeries.length - 1];\n  const hoursSpan = (new Date(last.t) - new Date(first.t)) / 3600000;\n  if (hoursSpan > 0 && first.sg != null && last.sg != null) {\n    loggedVelocity = (last.sg - first.sg) / (hoursSpan / 24);\n  }\n}\n\nconst pillSeriesText = pillSeries.length\n  ? pillSeries.map(p => `${p.t} | SG=${p.sg != null ? p.sg.toFixed(4) : '-'} | temp=${p.temp ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\nconst controllerSeriesText = controllerSeries.length\n  ? controllerSeries.map(p => `${p.t} | temp=${p.temp ?? '-'}°C | target=${p.target ?? '-'}°C`).join('\\n')\n  : '(ไม่มีข้อมูล)';\nconst controlSeriesText = controlSeries.length\n  ? controlSeries.map(c => `${c.t} | เดิม ${c.old ?? '-'}°C → ใหม่ ${c.new ?? '-'}°C | โดย ${c.by ?? '-'}${c.remark ? ' | เหตุผล: ' + c.remark : ''}`).join('\\n')\n  : '(ไม่มีการปรับ target ด้วยมือในช่วงนี้)';\n\nconst promptText = `คุณคือผู้เชี่ยวชาญการหมักเบียร์ (อ้างอิงหลักการจาก BJCP Yeast & Fermentation guide, John Palmer \"How to Brew\", Brew Your Own Fermentation Timeline) วิเคราะห์ว่า batch นี้อยู่เฟสไหนใน 6 เฟสนี้ โดยดูจาก \"กราฟ\" gravity/อุณหภูมิทั้งเส้นที่ให้ด้านล่าง (เรียงตามเวลา จากเก่าไปใหม่) ไม่ใช่แค่จุดเดียว:\n\n1. lag (0-24 ชม.แรกหลัง pitch): ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน กราฟ gravity แทบไม่ขยับจากค่าเริ่มต้น แทบไม่มีผลต่างอุณหภูมิระหว่าง pill กับตู้ควบคุม\n\n2. active_ferment (วันที่ 1-4, หนักสุดมักอยู่ใน 48-72 ชม.แรก): high krausen, กราฟ gravity ลาดชันลงเร็วที่สุดของทั้งเส้น, pill มักอุ่นกว่าตู้ควบคุมชัดเจน (2-5°C, ปฏิกิริยาคายความร้อน)\n\n3. slowing: กราฟ gravity เริ่มโค้งผ่อนความชันลงจากช่วงชันสุด แต่ยังลดต่อเนื่องชัดเจน (ไม่แบนราบ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง\n\n4. fg_stable: กราฟ gravity แบนราบต่อเนื่องอย่างน้อย 24-48 ชม. (ไม่ลดต่อแล้วอย่างมีนัยสำคัญ) ผลต่างอุณหภูมิ pill-ตู้ควบคุมใกล้ 0\n   ⚠️ ถ้ากราฟแบนเร็วผิดปกติ (เช่นภายใน 2-3 วันแรก) หรือแบนที่ค่าซึ่งยังสูงมากเทียบกับช่วงต้นกราฟ อาจเป็น \"stuck fermentation\" ให้ระบุความสงสัยไว้ใน reasoning ด้วย (ไม่ต้องเปลี่ยน phase ที่ตอบ แค่เตือนไว้)\n\n5. diacetyl_rest: ต้องผ่าน fg_stable มาก่อน แล้ว \"อุณหภูมิ Pill\" (เบียร์จริง ไม่ใช่อุณหภูมิตู้ควบคุม) ถูกยกขึ้นจาก \"อุณหภูมิหมักปกติของ batch นี้\" (ดูค่าที่ให้ไว้ด้านล่าง) ประมาณ +2 ถึง +4°C ค้างไว้ 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่แม้ไม่บังคับ) — **นี่คือช่วงสัมพัทธ์ ไม่ใช่ตัวเลของศาตายตัว** เพราะแต่ละ batch/ยีสต์หมักที่อุณหภูมิต่างกัน (เช่น batch ที่หมักปกติ 18°C แล้วยกไป 20-22°C ก็นับเป็น diacetyl_rest ได้ ไม่จำเป็นต้องอยู่ในช่วง 16-18°C แบบตายตัว) ใช้อุณหภูมิ Pill ตัดสินเป็นหลักเสมอ ส่วน target/อุณหภูมิตู้ควบคุมเป็นแค่ข้อมูลเสริมว่าตู้กำลังพยายามไล่ตามคำสั่งอยู่หรือยัง (ห้ามใช้แค่ target/ตู้ยังไม่ถึงมาสรุปว่ายังไม่เข้า diacetyl_rest ทั้งที่ Pill เองถึงแล้ว)\n\n6. cold_crash: ต้องผ่าน fg_stable (และปกติ diacetyl_rest) มาก่อน แล้ว \"อุณหภูมิ Pill\" (เบียร์จริง) ลดลงเหลือ 0-4°C ค้างไว้ 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน) — ใช้อุณหภูมิ Pill ตัดสินเป็นหลักเช่นเดียวกับข้อ 5\n\nหมายเหตุสำคัญ: ด้านล่างมี \"ประวัติการปรับ target ด้วยมือ\" ซึ่งผู้ควบคุมสั่งผ่านระบบพร้อมระบุเหตุผล (remark) เช่น \"d rest\" หรือ \"cold crash\" — ให้ใช้เป็นหลักฐานสนับสนุนสำคัญประกอบการตัดสินเฟส เพราะสะท้อนเจตนาจริงของผู้ควบคุม ไม่ใช่แค่ inference จากอุณหภูมิเพียงอย่างเดียว (เช่น ถ้าเพิ่งมีรายการปรับ target ขึ้นพร้อม remark \"d rest\" ให้ตีความว่ากำลังเข้าสู่ diacetyl_rest แม้ Pill จะยังไล่อุณหภูมิขึ้นไม่ถึง target ก็ตาม)\n\nข้อมูล batch \"${batch.beer_name || '(ไม่ระบุชื่อ)'}\":\n- เริ่มหมักมาแล้ว: ${hoursSinceStart.toFixed(1)} ชั่วโมง (${(hoursSinceStart / 24).toFixed(1)} วัน)\n- เฟสล่าสุดที่บันทึกไว้: ${batch.current_phase}\n- อุณหภูมิ Pill (เบียร์จริง) ล่าสุด: ${latestPill && latestPill.temp != null ? latestPill.temp : 'ไม่มีข้อมูล'}°C ← ใช้ตัวนี้ตัดสิน diacetyl_rest/cold_crash เป็นหลัก\n- อุณหภูมิหมักปกติของ batch นี้ (เฉลี่ย Pill ช่วง 72 ชม.แรก): ${fermentationBaselineTemp ?? 'ไม่มีข้อมูล'}°C ← baseline สำหรับเทียบว่ายกขึ้น +2 ถึง +4°C แล้วหรือยัง (diacetyl_rest)\n- อุณหภูมิตู้ควบคุมล่าสุด: ${latestController && latestController.temp != null ? latestController.temp : 'ไม่มีข้อมูล'}°C (ข้อมูลเสริมเท่านั้น)\n- target temperature ที่ตู้ควบคุมตั้งไว้ปัจจุบัน: ${latestController && latestController.target != null ? latestController.target : 'ไม่มีข้อมูล'}°C\n\nกราฟ gravity/อุณหภูมิ Pill ตามเวลา (${pillSeries.length} จุด, เรียงเก่า→ใหม่):\n${pillSeriesText}\n\nกราฟอุณหภูมิตู้ควบคุมตามเวลา (${controllerSeries.length} จุด, เรียงเก่า→ใหม่):\n${controllerSeriesText}\n\nประวัติการปรับ target ด้วยมือ (${controlSeries.length} รายการ, เรียงเก่า→ใหม่):\n${controlSeriesText}\n\nตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปนก่อน/หลัง รูปแบบ:\n{\"phase\": \"<lag|active_ferment|slowing|fg_stable|diacetyl_rest|cold_crash>\", \"reasoning\": [\"<เหตุผลข้อที่ 1 สั้นๆ ภาษาไทย อ้างอิงข้อมูลที่ให้มาประกอบ>\", \"<เหตุผลข้อที่ 2>\", \"...\"]}\nreasoning ต้องเป็น array ของ string สั้นๆ ไม่เกิน 4 ข้อ แต่ละข้อคือประเด็นเดียว ไม่ใช่ paragraph ยาวๆ`;\n\nconst ogSg = pillSeries.length ? pillSeries[0].sg : null;\nconst currentSg = latestPill ? latestPill.sg : null;\nconst abvPercent = (ogSg != null && currentSg != null)\n  ? Number(((ogSg - currentSg) * 131.25).toFixed(2))\n  : null;\n\nreturn [{\n  json: {\n    batch_id: batch.batch_id,\n    beer_name: batch.beer_name,\n    current_phase: batch.current_phase,\n    prep_alerted_for_phase: batch.prep_alerted_for_phase,\n    gravity_sg: latestPill ? latestPill.sg : null,\n    temperature_c: latestPill ? latestPill.temp : null,\n    pill_time_utc: latestPill ? latestPill.t : null,\n    gravity_velocity: loggedVelocity,\n    controller_temp_c: latestController ? latestController.temp : null,\n    target_temperature_c: latestController ? latestController.target : null,\n    controller_time_utc: latestController ? latestController.t : null,\n    abv_percent: abvPercent,\n    prompt: promptText\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -767,6 +767,264 @@
       ],
       "id": "2edba1b7-6310-4c78-8014-ab6cf36d325a",
       "name": "Build Status Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "4afd423e-1cbb-4892-a95b-71c9adc22b6c",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "set_temp",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        750
+      ],
+      "id": "f94eb816-02c8-4e99-9b96-ed11d959331f",
+      "name": "Is Set Temp?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\nbatch_info AS (\n  SELECT b.batch_id, b.beer_name, b.temp_controller_device_id\n  FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active'\n  LIMIT 1\n),\ncontroller_info AS (\n  SELECT device_name AS controller_name FROM devices WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n),\nlast_target AS (\n  SELECT target_temperature_c FROM temp_controller_readings\n  WHERE device_id = (SELECT temp_controller_device_id FROM batch_info)\n  ORDER BY time_utc DESC LIMIT 1\n)\nSELECT\n  bi.batch_id::text AS batch_id,\n  bi.beer_name,\n  bi.temp_controller_device_id::text AS temp_controller_device_id,\n  ci.controller_name,\n  lt.target_temperature_c AS current_target\nFROM (SELECT 1) AS anchor\nLEFT JOIN batch_info bi ON true\nLEFT JOIN controller_info ci ON true\nLEFT JOIN last_target lt ON true;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2200,
+        750
+      ],
+      "id": "9855b886-3d96-4950-832c-c8fc263b9830",
+      "name": "Get Batch For Set Temp",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ca40cb38-68c8-469f-a3e5-2cd6d4ebe03b",
+              "leftValue": "={{ $json.batch_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        750
+      ],
+      "id": "55ce0a01-0bc0-4b58-b435-85397344e11e",
+      "name": "Is Batch Found (Set Temp)?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "dbfcc5f4-ff0a-4958-a83a-59b4585fef71",
+              "leftValue": "={{ $json.temp_controller_device_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        680
+      ],
+      "id": "706da6b6-974c-4761-a8b2-c5e64707fd2b",
+      "name": "Has Controller (Set Temp)?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://id.rapt.io/connect/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "rapt-user"
+            },
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "username",
+              "value": "={{$env.RAPT_USERNAME}}"
+            },
+            {
+              "name": "password",
+              "value": "={{$env.RAPT_API_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2860,
+        620
+      ],
+      "id": "922dce79-a0d3-486f-9f5d-ede0122619e7",
+      "name": "Get RAPT Token (Set Temp)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.rapt.io/api/TemperatureControllers/SetTargetTemperature",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token (Set Temp)').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "temperatureControllerId",
+              "value": "={{ $('Get Batch For Set Temp').first().json.temp_controller_device_id }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $('Parse Interaction Command').first().json.target_temp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3080,
+        620
+      ],
+      "id": "e3af39d0-6e23-4f4d-b084-ce10466f9b1c",
+      "name": "Call Set Target Temperature"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO control_log (device_id, action, old_value, new_value, changed_by, remark)\nVALUES ($1, 'set_target_temperature', NULLIF($2,'null'), $3, $4, NULLIF($5,'null'));",
+        "options": {
+          "queryReplacement": "={{$('Get Batch For Set Temp').first().json.temp_controller_device_id}}, {{$('Get Batch For Set Temp').first().json.current_target}}, {{$('Parse Interaction Command').first().json.target_temp}}, {{$('Parse Interaction Command').first().json.requested_by}}, {{$('Parse Interaction Command').first().json.remark}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        3300,
+        620
+      ],
+      "id": "03fd02c2-1370-49ad-8d94-ae1f3f64ff5a",
+      "name": "Log Control Action",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst batch = $('Get Batch For Set Temp').first().json;\n\nconst oldText = batch.current_target != null ? batch.current_target + '°C' : 'ไม่มีข้อมูลเดิม';\nconst remarkText = cmd.remark ? ('\\nเหตุผล: ' + cmd.remark) : '';\n\nconst content = '🌡️ ปรับ target temperature: ' + (batch.beer_name || '(ไม่ระบุชื่อ)') + ' (Controller: ' + (batch.controller_name || '-') + ')\\n'\n  + oldText + ' → ' + cmd.target_temp + '°C'\n  + remarkText\n  + '\\nสั่งโดย: ' + cmd.requested_by;\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        620
+      ],
+      "id": "75c80e79-eccf-4e93-a1e2-af5bad2ae337",
+      "name": "Build Set Temp Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst batch = $('Get Batch For Set Temp').first().json;\nreturn [{\n  json: {\n    content: '⚠️ batch \"' + (batch.beer_name || cmd.pill) + '\" ยังไม่มี Controller ที่จับคู่ไว้ใน RAPT — เช็คการ pair ใน RAPT แล้ว sync devices ใหม่',\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        850
+      ],
+      "id": "442e5d6e-1324-4dde-afa7-5f7f969e53ab",
+      "name": "Build No Controller Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nreturn [{\n  json: {\n    content: '⚠️ ไม่พบ batch ที่ active อยู่สำหรับ Pill: ' + cmd.pill,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        950
+      ],
+      "id": "76f207b5-f009-406c-b23d-16b778093964",
+      "name": "Build Set Temp Not Found Message"
     }
   ],
   "connections": {
@@ -944,7 +1202,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Is Set Temp?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build Status Message": {
@@ -1107,6 +1371,131 @@
         [
           {
             "node": "Build Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Set Temp?": {
+      "main": [
+        [
+          {
+            "node": "Get Batch For Set Temp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Batch For Set Temp": {
+      "main": [
+        [
+          {
+            "node": "Is Batch Found (Set Temp)?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Batch Found (Set Temp)?": {
+      "main": [
+        [
+          {
+            "node": "Has Controller (Set Temp)?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Set Temp Not Found Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Controller (Set Temp)?": {
+      "main": [
+        [
+          {
+            "node": "Get RAPT Token (Set Temp)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build No Controller Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RAPT Token (Set Temp)": {
+      "main": [
+        [
+          {
+            "node": "Call Set Target Temperature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Set Target Temperature": {
+      "main": [
+        [
+          {
+            "node": "Log Control Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Control Action": {
+      "main": [
+        [
+          {
+            "node": "Build Set Temp Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Set Temp Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build No Controller Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Set Temp Not Found Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
             "type": "main",
             "index": 0
           }

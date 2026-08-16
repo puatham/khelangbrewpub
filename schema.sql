@@ -94,6 +94,9 @@ CREATE TABLE control_log (
   old_value TEXT,
   new_value TEXT,
   changed_by TEXT,
+  -- เหตุผลของการปรับ (เช่น "adjust", "d rest") ที่ผู้ใช้กรอกผ่าน
+  -- /ferment_set_temp — ส่งต่อไปประกอบ prompt วิเคราะห์เฟสของ AI ด้วย
+  remark TEXT,
   changed_at TIMESTAMPTZ DEFAULT now()
 );
 

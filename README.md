@@ -382,9 +382,15 @@ Query Parameters: `{{$json.pill}}`
 - `Update Prep Alert State` เจอบั๊กเดียวกับ `Update Batch Phase`: อยู่หลัง `Send Prep Alert` (HTTP node ที่ทับ `$json` ด้วย response ของ Discord) จึงอ่าน `$json.next_phase`/`$json.batch_id` ตรงๆ ไม่ได้ ต้องอ้างอิง `$('Parse AI Response').itemMatching($itemIndex).json.xxx` เหมือนกัน
 - reset `bot_state.last_discord_message_id` เป็น `'0'` ตอนเคลียร์ข้อมูลทดสอบ **ทำให้ Discord Command Intake replay ข้อความเก่าทั้งหมดในแชทซ้ำ** (สร้าง batch ซ้อนกันหลายสิบแถว) วิธีที่ถูกต้องคือตั้งเป็น Discord snowflake ของเวลาปัจจุบันแทน (`(now_ms - 1420070400000) << 22`) เพื่อให้ intake ไม่ไปอ่านข้อความที่เก่ากว่าตอนเคลียร์
 
-### 8.4 "รับคำสั่งปรับอุณหภูมิ" — ❌ ยังไม่ได้สร้าง (task #33)
+### 8.4 "รับคำสั่งปรับอุณหภูมิ" — 🟡 สร้างเสร็จ รอทดสอบจริงผ่าน Discord (task #33, 16 ส.ค.)
 
-แผนคร่าวๆ: ต่อยอดจาก workflow 8.2 เพิ่มคำสั่งแบบ `!ferment settemp pill=Pill01 target=20.5` → เรียก `SetTargetTemperature` → insert `control_log` → ยืนยันกลับ Discord
+เพิ่มเป็น slash command `/ferment_set_temp` ในโครง 8.5 (ไม่ใช่ workflow แยก) รับ param `pill` (required), `target` (number, required), `remark` (optional เช่น `adjust`, `d rest`, `cold crash`) — สั่งตรงผ่าน RAPT `POST /api/TemperatureControllers/SetTargetTemperature?temperatureControllerId=...&target=...` แล้ว log ผลลง `control_log` (คอลัมน์ `remark` เพิ่มใหม่)
+
+Node เพิ่มใน `Discord Interactions Webhook`: `Is Status?`(false) → `Is Set Temp?` → `Get Batch For Set Temp`(หา controller ที่จับคู่กับ pill + target ปัจจุบันจาก `temp_controller_readings` ล่าสุด) → `Is Batch Found (Set Temp)?` → `Has Controller (Set Temp)?` → `Get RAPT Token (Set Temp)` → `Call Set Target Temperature` → `Log Control Action`(insert `control_log`) → `Build Set Temp Message` → `Send Followup` (มีสาย error แยกสำหรับ "ไม่พบ batch" กับ "batch ยังไม่มี controller จับคู่")
+
+**เอา `control_log` เข้าไปประกอบ prompt วิเคราะห์เฟสของ AI ด้วย**: ทั้ง `Phase Analysis Cron` (`Get Latest Readings`) และ `Discord Interactions Webhook` (`Get Batch For Analysis`) เพิ่ม CTE `control_series` ดึงประวัติ `set_target_temperature` ของ controller ตัวนั้นตั้งแต่ `start_date` ของ batch ส่งเป็น "ประวัติการปรับ target ด้วยมือ" ต่อท้ายกราฟ gravity/อุณหภูมิใน prompt พร้อมกำกับให้ AI ตีความ remark (เช่น "d rest") เป็นหลักฐานสนับสนุนสำคัญ — ไม่ใช่แค่ inference จากอุณหภูมิเพียงอย่างเดียว เพราะสะท้อนเจตนาจริงของผู้ควบคุม
+
+**บั๊กที่ระวังไว้ล่วงหน้า** (จากประสบการณ์ 8.3/8.5): `remark` เป็น free text จากผู้ใช้ ถ้ามี comma จะไปเลื่อนตำแหน่ง positional parameter ใน `queryReplacement` เหมือนที่เจอกับ AI reasoning text มาก่อน — sanitize comma → full-width `，` ตั้งแต่ตอน parse ใน `Parse Interaction Command`; `old_value`/`remark` อาจเป็น `null` (ยังไม่เคยมี target reading มาก่อน หรือไม่ได้กรอก remark) ซึ่ง n8n จะแปลงเป็น literal text `"null"` ใน `queryReplacement` ต้องครอบด้วย `NULLIF($n, 'null')`
 
 ### 8.5 "Discord Interactions Webhook" (slash commands) — ✅ เสร็จ ทดสอบผ่าน (task #35, 15 ส.ค.)
 
@@ -427,7 +433,7 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - #30 workflow sync devices — ✅ เสร็จ ทดสอบผ่าน
 - #31 workflow Discord command intake — 🔴 เลิกใช้แล้ว (unpublish 15 ส.ค.) ถูกแทนที่ด้วย #35 — ดูข้อ 8.2
 - #32 workflow cron วิเคราะห์เฟส — ✅ เสร็จ ทดสอบผ่าน + **publish/active จริงแล้ว** (เพิ่งพบว่าไม่เคย publish มาก่อน แก้ 15 ส.ค.)
-- #33 workflow รับคำสั่งปรับอุณหภูมิ — ❌ ยังไม่เริ่ม
+- #33 workflow รับคำสั่งปรับอุณหภูมิ (`/ferment_set_temp` + remark เข้า AI prompt) — 🟡 สร้างเสร็จ รอทดสอบจริง — 16 ส.ค.
 - #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 DB เพิ่งเคลียร์ล่าสุด 15 ส.ค. รอผู้ใช้เริ่มลงทะเบียน batch ใหม่ผ่าน `/ferment_start`
 - #35 Discord slash command (`/ferment_start`, `/ferment_stop`) — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #36 `/ferment_status` + auto-resolve controller จาก RAPT pairing — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
