@@ -56,6 +56,8 @@ services:
       - RAPT_API_SECRET=${RAPT_API_SECRET}
       - DISCORD_APPLICATION_ID=${DISCORD_APPLICATION_ID}
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
+      - BREWFATHER_USER_ID=${BREWFATHER_USER_ID}
+      - BREWFATHER_API_KEY=${BREWFATHER_API_KEY}
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /local-files:/files
