@@ -8,7 +8,7 @@
 
 สร้างระบบที่:
 1. รับคำสั่งจาก Discord ว่ากำลังหมัก batch ไหน ใช้ Pill ตัวไหน จับคู่กับ Temperature Controller ตัวไหน
-2. AI agent อ่านค่า gravity/temperature จาก Pill มาวิเคราะห์ว่าตอนนี้การหมักอยู่ช่วงไหน (lag, active ferment/hi krausen, slowing, ยีสต์กินเสร็จ, diacetyl rest, cold crash — 6 ช่วง เป็นมาตรฐานตายตัว ไม่มีช่วงไหน optional)
+2. AI agent อ่านค่า gravity/temperature จาก Pill มาวิเคราะห์ว่าตอนนี้การหมักอยู่ช่วงไหน (lag, active ferment/hi krausen, slowing_ferment, ยีสต์กินเสร็จ, diacetyl rest, cold crash — 6 ช่วง เป็นมาตรฐานตายตัว ไม่มีช่วงไหน optional)
 3. แจ้งเตือนใน Discord เมื่อเฟสเปลี่ยน พร้อมข้อเสนอ next action
 4. รับคำสั่งกลับจาก Discord เพื่อสั่งปรับอุณหภูมิ Temperature Controller จริงผ่าน RAPT API
 5. **เป็นโปรเจกต์แยกอิสระ ไม่พึ่งพา InfluxDB/Grafana stack เดิม (`rapt-stack`)** — ดึงข้อมูลจาก RAPT API ตรง เก็บเองใน Postgres ทั้งหมด
@@ -418,7 +418,7 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 
 1. **lag** — 0-24 ชม.แรกหลัง pitch ยีสต์ปรับตัว ยังไม่มี krausen ชัดเจน gravity แทบไม่ขยับ (apparent attenuation ~0%) แทบไม่มีผลต่างอุณหภูมิ pill-ตู้ควบคุม
 2. **active_ferment** — วันที่ 1-4 (หนักสุดมักอยู่ใน 48-72 ชม.แรก) high krausen, gravity ลดเร็วที่สุด, apparent attenuation ไต่ขึ้นเร็วจนใกล้ 50-75%, pill มักอุ่นกว่าตู้ควบคุม 2-5°C จากปฏิกิริยาคายความร้อน (exothermic)
-3. **slowing** — krausen เริ่มยุบ อัตราลด gravity ผ่อนลงจากจุดสูงสุดแต่ยัง "ลบชัดเจน" attenuation มักอยู่แถว 60-80% แล้วแต่ยังไม่นิ่ง ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง
+3. **slowing_ferment** — krausen เริ่มยุบ อัตราลด gravity ผ่อนลงจากจุดสูงสุดแต่ยัง "ลบชัดเจน" attenuation มักอยู่แถว 60-80% แล้วแต่ยังไม่นิ่ง ผลต่างอุณหภูมิ pill-ตู้ควบคุมเริ่มแคบลง
 4. **fg_stable** — gravity velocity ใกล้ 0 ต่อเนื่อง 24-48 ชม. (RAPT เองแนะนำให้เริ่ม cold crash ได้เมื่อ velocity แตะ 0) attenuation ควรอยู่ 65-80% ตามเกณฑ์ BJCP ผลต่างอุณหภูมิ pill-ตู้ควบคุมควรใกล้ 0 — ⚠️ ถ้านิ่งเร็วผิดปกติหรือ attenuation ต่ำกว่า ~60% ให้สงสัยว่าเป็น stuck fermentation
 5. **diacetyl_rest** — ต้องผ่าน fg_stable ก่อน แล้วยกอุณหภูมิตู้ควบคุมเป็น 16-18°C ค้าง 2-3 วัน (จำเป็นสำหรับ lager, แนะนำสำหรับ ale ส่วนใหญ่)
 6. **cold_crash** — ต้องผ่าน fg_stable (และปกติ diacetyl_rest) ก่อน แล้วลดอุณหภูมิตู้ควบคุมเหลือ 0-4°C ค้าง 1-3 วัน (ale ~1-2 วัน, lager ~2-3 วัน)
