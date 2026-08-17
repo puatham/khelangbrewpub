@@ -377,6 +377,16 @@ Query Parameters: `{{$json.pill}}`
 
 **ไทม์ไลน์การหมัก (เพิ่ม 18 ส.ค.)**: `Build AI Prompt` ขอให้ AI ประมาณช่วงเวลาของแต่ละเฟสที่ผ่านมาแล้วจากกราฟทั้งเส้น (field ใหม่ `phase_timeline` — เอาแค่วันที่ไม่มีเวลา เรียงจาก `lag` ไล่ลงมา แยก `high_krausen` ออกจาก `active_ferment` เป็นคนละรายการ) `Parse AI Response` render เป็น `phase_timeline_text` (`• <phase>: <from> - <to> | <summary>`) แล้ว `Send Routine Update` แทรกเป็นส่วน `⏱️ ไทม์ไลน์การหมัก` ต่อจากหัวข้อสถานะ ก่อนถึง reasoning — ไม่ได้บันทึกลง DB (ส่งต่อผ่าน item flow อย่างเดียวเหมือน `next_phase`/`prep_actions_text`) เพิ่ม field เดียวกันใน `Discord Interactions Webhook`'s `Build Status Analysis Prompt`/`Parse Status Analysis`/`Build Status Message` ด้วยเพื่อให้ `/ferment_status` แสดงไทม์ไลน์เหมือนกัน
 
+**แนะนำ target + ปุ่มยืนยันปรับอุณหภูมิจริง (เพิ่ม 18 ส.ค., task #38)**: เมื่อ batch ผูก recipe ไว้ (ข้อ 8.1) `Get Latest Readings` จะดึงแผนขั้นตอนอุณหภูมิหมัก (`fermentation_steps` จาก `recipes.raw_data`) + ช่วงอุณหภูมิของยีสต์ (`yeasts.min_temp_c`/`max_temp_c`) ส่งเข้า `Build AI Prompt` เป็น context เสริม พร้อมคำนวณ **"ส่วนต่างอุณหภูมิ Pill-ตู้ควบคุมช่วงที่นิ่งแล้ว"** (`stable_gap_c`) — เฉลี่ย `Pill_temp - Controller_temp` จากช่วง **หลังปรับ target ล่าสุด + 2 ชม. (กันช่วง transient) ถึงตอนนี้ แต่ไม่ย้อนเกิน 12 ชม.** (กันข้อมูลเก่าที่สภาพห้องอาจเปลี่ยนไปแล้ว)
+
+หลักการสำคัญที่ย้ำไว้ใน prompt ชัดเจน: **แผนจาก Brewfather ใช้ตอบแค่ "ควรตั้ง target เท่าไหร่" เท่านั้น ห้ามใช้จำนวนวัน/ลำดับ step ตัดสินว่า "ถึงเวลาเปลี่ยนเฟสหรือยัง"** — การตัดสินเฟส/`approaching_transition` ยังต้องดูจากอุณหภูมิ Pill และกราฟ gravity จริงเหมือนเดิมทุกประการ เพราะการหมักจริงเสร็จเร็ว/ช้ากว่าแผนได้เสมอ (คนละบทบาทกับ gate ที่ Pill เป็นคนตัดสิน)
+
+AI ตอบ field ใหม่ `recommended_pill_temp_c` (อุณหภูมิ **Pill** ที่อยากให้ถึง ไม่ใช่ target ตู้ควบคุม) เฉพาะตอน `approaching_transition=true` และ `next_phase` เป็น `diacetyl_rest`/`cold_crash` — อ้างอิง `stepTemp` ของ step ที่ตรงในแผน recipe ถ้ามี ไม่งั้น fallback เป็นเกณฑ์เดิม (baseline+2~+4°C / 0-4°C) `Parse AI Response` แปลงเป็น **target ตู้ควบคุมจริง**: `recommended_controller_target_c = recommended_pill_temp_c - stable_gap_c` (ปัดทศนิยม 1 ตำแหน่ง, เป็น `null` ถ้าไม่มีข้อมูล gap พอ) แล้ว `Send Routine Update` เปลี่ยนเป็น raw JSON body (แทน Body Parameters ตามบั๊กที่เจอมาก่อนใน 8.5) แนบ **ปุ่ม Discord message component** ต่อท้ายข้อความเมื่อมีค่าแนะนำ — `custom_id` เข้ารหัส `settemp|<batch_id>|<target>|<next_phase>`
+
+กดปุ่มแล้ว `Discord Interactions Webhook` จะรับ interaction type 3 (MESSAGE_COMPONENT) สาขาใหม่: `Is Component?` → `Respond Deferred (Component)` (type 6 = DEFERRED_UPDATE_MESSAGE แก้ข้อความเดิมแทนที่จะส่งใหม่) → `Parse Component Interaction` (decode custom_id) → `Get Batch By Id` → `Is Batch Found (Component)?` → `Get RAPT Token (Component)` → `Call Set Target Temperature (Component)` (ยิง RAPT จริง) → `Log Control Action (Component)` (insert `control_log`, `remark` = next_phase ที่กดตอนนั้น) → `Build Component Confirm Message` → `Send Followup` (reuse node เดิม)
+
+ทดสอบ SQL/logic ทั้งหมดด้วยข้อมูลจริงก่อน deploy: gap calc กับ batch Hazy DIPA จริง (ได้ 1.74°C จาก 3 จุด), prompt render กับ recipe/yeast/fermentation steps จริงครบ, custom_id encode/decode, `Get Batch By Id`/`Log Control Action` ผ่าน transaction rollback บน VPS, JSON payload ของปุ่ม (`components`) ตรง shape ที่ Discord ต้องการ
+
 **"ใกล้จะเปลี่ยนเฟส เตรียมตัว" alert** (เพิ่ม 15 ส.ค.): AI ประเมินเพิ่มว่า batch มีสัญญาณใกล้เข้าเฟสถัดไปหรือไม่ (`approaching_transition`/`next_phase`/`prep_actions` ใน JSON response) ถ้าใช่จะส่ง Discord alert แยกต่างหาก บอกสิ่งที่ควรเตรียม (เช่น ใกล้ diacetyl_rest → เตรียมยกอุณหภูมิ 16-18°C) กันสแปมด้วย `batches.prep_alerted_for_phase` — ส่งครั้งเดียวต่อ `next_phase` หนึ่งค่า จนกว่า AI จะเปลี่ยนใจเป็น next_phase อื่น หรือเฟสเปลี่ยนจริง (reset เป็น `NULL` อัตโนมัติใน `Update Batch Phase`)
 
 **AI ที่ใช้**: Claude (Anthropic Messages API, `claude-sonnet-5`, `max_tokens=4096`) ไม่ใช้ web search — เกณฑ์ 6 เฟส bake เป็น context ตายตัวในทุก prompt (ดูข้อ 9) เพราะเป็นความรู้ที่นิ่งแล้ว ไม่ต้องเสียเวลา/เงินค้นเว็บซ้ำทุกรอบ
@@ -424,6 +434,8 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - `PATCH .../messages/@original` ตอบ "Unknown Webhook" ทั้งที่ token/application_id ถูกทุกอย่าง — สาเหตุจริงคือ body mode "Using Fields Below" ของ HTTP Request node ไม่ได้ serialize เป็น JSON จริง (ไม่มี `Content-Type: application/json`, request ออกไปแบบ `json:false`) ต้องเปลี่ยนเป็น **Body Content Type: Raw + `application/json`** พร้อม `JSON.stringify(...)` เอง ถึงจะผ่าน
 - reset `bot_state` เป็น `'0'` ตอนเคลียร์ DB ทำให้ Discord Command Intake (workflow แบบ polling เดิม) replay ข้อความเก่าซ้ำ — ไม่เกี่ยวกับ slash command แต่กระทบ batch ซ้อนกันถ้าเผลอรันทั้งสอง workflow พร้อมกันตอน DB ว่าง ระวังจุดนี้เวลาเคลียร์ข้อมูลอีก
 
+**รับปุ่มยืนยันปรับอุณหภูมิ (เพิ่ม 18 ส.ค., task #38)**: สาขาใหม่รับ Discord message component (ดูรายละเอียดเต็มในข้อ 8.3) — `Is Command?`(false) → `Is Component?`(type===3) → `Respond Deferred (Component)`(type 6) → `Parse Component Interaction` → `Get Batch By Id` → `Is Batch Found (Component)?` → `Get RAPT Token (Component)` → `Call Set Target Temperature (Component)` → `Log Control Action (Component)` → `Build Component Confirm Message` → `Send Followup` (reuse node เดิมจาก slash command flow) รวม node ทั้งไฟล์ตอนนี้ 52 ตัว
+
 **เพิ่ม param `recipe` ใน `/ferment_start` (18 ส.ค.)**: optional, ผูก batch กับ recipe ที่ sync มาจาก Brewfather (ดูข้อ 8.1) — `Create Batch` เพิ่ม CTE `matched_recipe` match ชื่อแบบ `trim(lower(...))` (กัน case/whitespace ไม่ตรง) แล้ว set `batches.recipe_id` ถ้าเจอ `Build Followup Message` โชว์ชื่อ recipe/style/OG-FG ตามสูตรกลับไปถ้า match ได้ หรือเตือนว่าไม่พบ recipe (พร้อมชื่อที่พิมพ์มา) ถ้าใส่ชื่อมาแต่หาไม่เจอ — ไม่ block การสร้าง batch แม้ recipe จะหาไม่เจอหรือไม่ได้ใส่มาเลย ทดสอบ query จริงกับข้อมูล Brewfather ที่ sync มาแล้วผ่าน transaction rollback บน VPS (match "khelang brew weizen" ตัวพิมพ์เล็ก/มีช่องว่างนำหน้า-ท้ายเจอ record "Khelang Brew Weizen" ถูกต้อง)
 
 ---
@@ -454,6 +466,7 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - #35 Discord slash command (`/ferment_start`, `/ferment_stop`) — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #36 `/ferment_status` + auto-resolve controller จาก RAPT pairing — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #37 Brewfather recipes/yeasts cache (`Sync Devices` เพิ่ม fetch, `/ferment_start` param `recipe`) — 🟡 สร้างเสร็จ ทดสอบ SQL/API จริงแล้ว รอ reimport + ทดสอบผ่าน Discord จริง — 18 ส.ค.
+- #38 แนะนำ target ตู้ควบคุมจากแผน recipe + ปุ่ม Discord ยืนยันปรับอุณหภูมิจริง — 🟡 สร้างเสร็จ ทดสอบ SQL/logic/payload ครบแล้ว รอ reimport + ทดสอบกดปุ่มจริงผ่าน Discord — 18 ส.ค.
 
 ---
 

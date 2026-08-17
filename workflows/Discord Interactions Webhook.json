@@ -1025,6 +1025,247 @@
       ],
       "id": "76f207b5-f009-406c-b23d-16b778093964",
       "name": "Build Set Temp Not Found Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ca13626c-2156-444e-94e4-8ac446fb1060",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        340
+      ],
+      "id": "05b60ac3-c7d0-43d0-8d11-1d68f34e1309",
+      "name": "Is Component?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 6} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        864,
+        340
+      ],
+      "id": "e91e5eed-3820-42a9-bea4-3c295f1a79a8",
+      "name": "Respond Deferred (Component)"
+    },
+    {
+      "parameters": {
+        "jsCode": "function sanitizeForQueryReplacement(text) {\n  return typeof text === 'string' ? text.replace(/,/g, '，') : text;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst customId = data.custom_id || '';\nconst parts = customId.split('|'); // settemp|<batch_id>|<target>|<remark>\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action_kind: parts[0] || null,\n    batch_id: parts[1] ? Number(parts[1]) : null,\n    target_temp: parts[2] ? Number(parts[2]) : null,\n    remark: parts[3] ? sanitizeForQueryReplacement(parts[3]) : null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        340
+      ],
+      "id": "5a020888-78a1-44db-9104-d83afbe5ba6b",
+      "name": "Parse Component Interaction"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT b.batch_id::text AS batch_id, b.beer_name, b.temp_controller_device_id::text AS temp_controller_device_id,\n       (SELECT device_name FROM devices WHERE device_id = b.temp_controller_device_id) AS controller_name,\n       (SELECT target_temperature_c FROM temp_controller_readings WHERE device_id = b.temp_controller_device_id ORDER BY time_utc DESC LIMIT 1) AS current_target\nFROM batches b\nWHERE b.batch_id = $1 AND b.status = 'active';",
+        "options": {
+          "queryReplacement": "={{$json.batch_id}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1312,
+        340
+      ],
+      "id": "6fe3bea0-ee50-4e6a-9231-f765c08af1f3",
+      "name": "Get Batch By Id",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "72786bbe-d550-4ae1-81e2-4b84e228686e",
+              "leftValue": "={{ $json.batch_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        340
+      ],
+      "id": "6c59e9e5-3cc2-4792-a96e-96de236abb6b",
+      "name": "Is Batch Found (Component)?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://id.rapt.io/connect/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "rapt-user"
+            },
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "username",
+              "value": "={{$env.RAPT_USERNAME}}"
+            },
+            {
+              "name": "password",
+              "value": "={{$env.RAPT_API_SECRET}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1760,
+        280
+      ],
+      "id": "0ce2abdd-a27a-42fa-a71a-14d637d3f7c0",
+      "name": "Get RAPT Token (Component)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.rapt.io/api/TemperatureControllers/SetTargetTemperature",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get RAPT Token (Component)').first().json.access_token }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "temperatureControllerId",
+              "value": "={{ $('Get Batch By Id').first().json.temp_controller_device_id }}"
+            },
+            {
+              "name": "target",
+              "value": "={{ $('Parse Component Interaction').first().json.target_temp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        280
+      ],
+      "id": "017911a7-a11b-4c36-b449-71b070004328",
+      "name": "Call Set Target Temperature (Component)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO control_log (device_id, action, old_value, new_value, changed_by, remark)\nVALUES ($1, 'set_target_temperature', NULLIF($2,'null'), $3, $4, NULLIF($5,'null'));",
+        "options": {
+          "queryReplacement": "={{$('Get Batch By Id').first().json.temp_controller_device_id}}, {{$('Get Batch By Id').first().json.current_target}}, {{$('Parse Component Interaction').first().json.target_temp}}, {{$('Parse Component Interaction').first().json.requested_by}}, {{$('Parse Component Interaction').first().json.remark}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2208,
+        280
+      ],
+      "id": "92437d58-0c71-49b8-9b33-7a61a5e6519b",
+      "name": "Log Control Action (Component)",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Component Interaction').first().json;\nconst batch = $('Get Batch By Id').first().json;\n\nconst oldText = batch.current_target != null ? batch.current_target + '°C' : 'ไม่มีข้อมูลเดิม';\n\nconst content = '✅ ปรับ target: ' + (batch.beer_name || ('batch ' + cmd.batch_id)) + ' (Controller: ' + (batch.controller_name || '-') + ')\\n'\n  + oldText + ' → ' + cmd.target_temp + '°C'\n  + '\\nเหตุผล: ' + (cmd.remark || '-')\n  + '\\nยืนยันโดย: ' + cmd.requested_by;\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        280
+      ],
+      "id": "ec84edbe-abac-4f44-bbc3-b63678bbb2b0",
+      "name": "Build Component Confirm Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Component Interaction').first().json;\nreturn [{\n  json: {\n    content: '⚠️ ไม่พบ batch ที่ active อยู่สำหรับการปรับนี้ (อาจตูกหยุดไปแล้ว)',\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        460
+      ],
+      "id": "b867f9fa-37b7-4d89-bd00-83df665d973b",
+      "name": "Build Component Not Found Message"
     }
   ],
   "connections": {
@@ -1091,6 +1332,13 @@
         [
           {
             "node": "Respond Deferred",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Component?",
             "type": "main",
             "index": 0
           }
@@ -1492,6 +1740,124 @@
       ]
     },
     "Build Set Temp Not Found Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Component?": {
+      "main": [
+        [
+          {
+            "node": "Respond Deferred (Component)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Respond Deferred (Component)": {
+      "main": [
+        [
+          {
+            "node": "Parse Component Interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Component Interaction": {
+      "main": [
+        [
+          {
+            "node": "Get Batch By Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Batch By Id": {
+      "main": [
+        [
+          {
+            "node": "Is Batch Found (Component)?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Batch Found (Component)?": {
+      "main": [
+        [
+          {
+            "node": "Get RAPT Token (Component)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Component Not Found Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RAPT Token (Component)": {
+      "main": [
+        [
+          {
+            "node": "Call Set Target Temperature (Component)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Set Target Temperature (Component)": {
+      "main": [
+        [
+          {
+            "node": "Log Control Action (Component)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Control Action (Component)": {
+      "main": [
+        [
+          {
+            "node": "Build Component Confirm Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Component Confirm Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Component Not Found Message": {
       "main": [
         [
           {
