@@ -457,6 +457,7 @@ Repo: `github.com/puatham/khelangbrewpub` (private)
 - `schema.sql` — DDL 7 ตารางครบ รันได้เลย (มี index ของ readings + seed `bot_state`)
 - `er-diagram.mermaid` — ER diagram schema เต็ม
 - `backup-workflows.sh` — export workflow จาก n8n ลง `workflows/` แล้ว commit ให้ (ดูข้อ 13)
+- `clear-data.sh` — เคลียร์ข้อมูลทดสอบทั้งหมดใน Postgres กลับเป็น DB ว่างเปล่า (ใช้ระหว่าง dev/test เท่านั้น) รันบน VPS: `./clear-data.sh` (ถามยืนยันก่อน) หรือ `./clear-data.sh --yes`
 - `workflows/` — n8n workflow ที่ export ไว้ **เป็นแหล่งจริง (source of truth)** ตรงกับของบน n8n เป๊ะทุกครั้งที่ backup — **ห้ามแก้ไฟล์ในนี้ด้วยมือ** ให้แก้ที่ n8n แล้วรัน backup แทน
 - `README.md` — ไฟล์นี้
 
