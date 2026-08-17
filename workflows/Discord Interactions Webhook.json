@@ -187,7 +187,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp', ferment_recipes: 'recipes' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    search: params.search || null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1269,6 +1269,75 @@
       ],
       "id": "b867f9fa-37b7-4d89-bd00-83df665d973b",
       "name": "Build Component Not Found Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b1a2c3d4-e5f6-4789-9abc-def012345678",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "recipes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        950
+      ],
+      "id": "a1b2c3d4-1111-4222-8333-944455556666",
+      "name": "Is Recipes?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  jsonb_agg(jsonb_build_object('name', name, 'style_name', style_name) ORDER BY name) AS recipes,\n  COUNT(*) AS recipe_count,\n  MAX(last_synced_at) AS last_synced_at\nFROM recipes\nWHERE (NULLIF($1, 'null')::text IS NULL OR name ILIKE '%' || NULLIF($1, 'null')::text || '%');",
+        "options": {
+          "queryReplacement": "={{$json.search}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2200,
+        950
+      ],
+      "id": "a1b2c3d4-2222-4333-8444-955566667777",
+      "name": "Get Recipes List",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst row = $input.first().json;\nconst recipes = row.recipes || [];\nlet content;\nif (!recipes.length) {\n  content = cmd.search\n    ? ('🔍 ไม่พบ recipe ที่ตรงกับ \"' + cmd.search + '\"')\n    : '📋 ยังไม่มี recipe ใน cache — รัน Sync Devices ก่อน';\n} else {\n  const lines = recipes.map(r => '• ' + r.name + (r.style_name ? (' — ' + r.style_name) : ''));\n  const syncedText = row.last_synced_at\n    ? (d => String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear())(new Date(row.last_synced_at))\n    : '-';\n  content = '📋 Recipes ใน cache (' + recipes.length + ' รายการ'\n    + (cmd.search ? (', ค้นหา \"' + cmd.search + '\"') : '')\n    + ', sync ล่าสุด: ' + syncedText + '):\\n'\n    + lines.join('\\n')\n    + '\\n\\nใช้ชื่อนี้เป๊ะๆ ตอนพิมพ์ /ferment_start recipe:...';\n}\nreturn [{ json: { content, application_id: cmd.application_id, interaction_token: cmd.interaction_token } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        950
+      ],
+      "id": "a1b2c3d4-3333-4444-8555-966677778888",
+      "name": "Build Recipes Message"
     }
   ],
   "connections": {
@@ -1637,7 +1706,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Is Recipes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Batch For Set Temp": {
@@ -1861,6 +1936,40 @@
       ]
     },
     "Build Component Not Found Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Recipes?": {
+      "main": [
+        [
+          {
+            "node": "Get Recipes List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Recipes List": {
+      "main": [
+        [
+          {
+            "node": "Build Recipes Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Recipes Message": {
       "main": [
         [
           {
