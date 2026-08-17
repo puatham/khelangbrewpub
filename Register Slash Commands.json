@@ -9,7 +9,7 @@
         0,
         0
       ],
-      "id": "4300c4d5-f25d-4b40-a91f-6f56ceec5aac",
+      "id": "fd71f3df-0dff-4e73-ad99-c6561929ecd6",
       "name": "Manual Trigger"
     },
     {
@@ -21,7 +21,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "[{\"name\": \"ferment_start\", \"description\": \"เริ่ม batch การหมักใหม่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"controller\", \"description\": \"ชื่อ Temperature Controller (เช่น Fridge2)\", \"type\": 3, \"required\": true}, {\"name\": \"beer\", \"description\": \"ชื่อเบียร์\", \"type\": 3, \"required\": false}, {\"name\": \"date\", \"description\": \"วันเวลาเริ่มหมักย้อนหลัง เช่น 12/8/2026 00:00 (ไม่ใส่ = ตอนนี้)\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_stop\", \"description\": \"หยุด batch การหมักที่ active อยู่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}]",
+        "body": "[{\"name\": \"ferment_start\", \"description\": \"เริ่ม batch การหมักใหม่ (Controller จะดึงจากที่ Pill จับคู่ไว้ใน RAPT อัตโนมัติ)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"beer\", \"description\": \"ชื่อเบียร์\", \"type\": 3, \"required\": true}, {\"name\": \"date\", \"description\": \"วันเวลาเริ่มหมัก เช่น 12/8/2026 00:00\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_stop\", \"description\": \"หยุด batch การหมักที่ active อยู่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_status\", \"description\": \"เช็คสถานะการหมักล่าสุดของ batch (เฟส, gravity, อุณหภูมิ, เหตุผลจาก AI)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_set_temp\", \"description\": \"ปรับ target temperature ของ Controller ที่จับคู่กับ Pill นี้ (สั่งตรงผ่าน RAPT API)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"target\", \"description\": \"target temperature ใหม่ (°C)\", \"type\": 10, \"required\": true}, {\"name\": \"remark\", \"description\": \"เหตุผลที่ปรับ เช่น adjust, d rest, cold crash\", \"type\": 3, \"required\": false}]}]",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -30,7 +30,7 @@
         220,
         0
       ],
-      "id": "58550863-cf8d-4921-93e3-d5a3de0e9c76",
+      "id": "2ef23c81-74d8-40d7-82f3-c4333b1eeace",
       "name": "Register Commands",
       "credentials": {
         "discordBotApi": {
