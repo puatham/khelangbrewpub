@@ -17,6 +17,40 @@ CREATE TABLE devices (
 );
 
 -- ---------------------------------------------------------------------
+-- recipes: cache ของ recipe จาก Brewfather (sync ผ่าน "Sync Devices")
+-- ---------------------------------------------------------------------
+CREATE TABLE recipes (
+  recipe_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  style_name TEXT,
+  og NUMERIC,
+  fg NUMERIC,
+  yeast_name TEXT,
+  fermentation_temp_c NUMERIC,
+  last_synced_at TIMESTAMPTZ DEFAULT now(),
+  raw_data JSONB
+);
+
+-- ---------------------------------------------------------------------
+-- yeasts: cache ของ yeast inventory จาก Brewfather (sync ผ่าน "Sync Devices")
+-- ---------------------------------------------------------------------
+CREATE TABLE yeasts (
+  yeast_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  laboratory TEXT,
+  product_id TEXT,
+  min_temp_c NUMERIC,
+  max_temp_c NUMERIC,
+  attenuation NUMERIC,
+  min_attenuation NUMERIC,
+  max_attenuation NUMERIC,
+  flocculation TEXT,
+  best_for TEXT,
+  last_synced_at TIMESTAMPTZ DEFAULT now(),
+  raw_data JSONB
+);
+
+-- ---------------------------------------------------------------------
 -- batches: batch การหมักที่กำลัง track อยู่ (ลงทะเบียนผ่าน Discord /ferment start)
 -- ---------------------------------------------------------------------
 CREATE TABLE batches (
@@ -32,7 +66,9 @@ CREATE TABLE batches (
   -- กันสแปม "ใกล้จะเปลี่ยนเฟส" alert: ส่งครั้งเดียวต่อ next_phase ที่ AI เสนอ
   -- reset กลับเป็น NULL ทุกครั้งที่เฟสเปลี่ยนจริง (ดู Update Batch Phase)
   prep_alerted_for_phase TEXT,
-  last_prep_alert_at TIMESTAMPTZ
+  last_prep_alert_at TIMESTAMPTZ,
+  -- recipe ที่ match จากชื่อตอน /ferment_start (optional, ดู recipes table)
+  recipe_id TEXT REFERENCES recipes(recipe_id)
 );
 
 -- ---------------------------------------------------------------------

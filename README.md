@@ -270,9 +270,19 @@ Query Parameters: `{{$json.device_id}}, {{$json.device_name}}, {{$json.device_ty
 - Query ON CONFLICT ตอนแรกไม่ได้ update `device_type`
 - Header `Authorization` ใน HTTP Request node **ห้ามมี `=` นำหน้า** ถ้า field เป็น expression mode อยู่แล้ว (ใส่ซ้อนจะกลายเป็น literal text ทำให้ 401)
 
-### 8.2 "Discord Command Intake" — 🔴 **เลิกใช้แล้ว (unpublish 15 ส.ค.)** ถูกแทนที่ด้วย 8.5
+**Brewfather recipes/yeasts cache (เพิ่ม 18 ส.ค.)**: เพิ่ม 2 กิ่งขนานจาก trigger เดิม — `Build Brewfather Auth`(Code, สร้าง `Authorization: Basic <base64(userid:apikey)>` เอง เพราะ Brewfather ไม่มี native credential type และ HTTP node expression ไม่มี `Buffer` ให้ใช้ ต้องคำนวณใน Code node) → แตก 2 สาย:
+- `Get Recipes`(GET `/v2/recipes?limit=50&complete=true`) → `Format Recipes` → `Save Recipes`(upsert ตาราง `recipes`)
+- `Get Yeasts`(GET `/v2/inventory/yeasts?limit=50&complete=true`) → `Format Yeasts` → `Save Yeasts`(upsert ตาราง `yeasts`)
 
-คำสั่ง `!ferment start ...` / `!ferment stop ...` แบบ text ไม่ใช้แล้ว ให้ใช้ `/ferment_start` `/ferment_stop` `/ferment_status` (slash command, ข้อ 8.5) แทนทั้งหมด — workflow นี้ unpublish ไว้แล้ว (ไม่ได้ลบ เผื่อต้องอ้างอิงโค้ดย้อนหลัง) เนื้อหาด้านล่างเก็บไว้เป็นบันทึกประวัติ
+Auth: Basic (`userid:apikey` base64) จาก Brewfather app → Settings → API → GENERATE (เลือก scope `recipes.read` + `inventory.read`) เก็บเป็น `BREWFATHER_USER_ID`/`BREWFATHER_API_KEY` ใน `.env`
+
+**ทดสอบกับ API จริงแล้ว** (curl ตรงๆ ก่อน deploy): 14 recipes, 3 yeasts ดึงมาครบ ยืนยัน field ที่ใช้ถูกต้อง (`og`, `fg`, `style.name`, `yeasts[0].{name,minTemp,maxTemp,attenuation,minAttenuation,maxAttenuation}`, `fermentation.steps[0].stepTemp`) limit เดียว (50) พอสำหรับ account นี้ ยังไม่ทำ pagination (`start_after`) เพราะไม่จำเป็น
+
+**บั๊กที่เจอและแก้ก่อน deploy**: Brewfather บางฟิลด์ที่เป็น optional (เช่น `bestFor`, `productId`, `minAttenuation`) ไม่มีอยู่ใน object เลยแทนที่จะเป็น `null` ตรงๆ — ถ้าปล่อย `undefined` เข้า `queryReplacement` ตรงๆ n8n จะ stringify เป็น literal text `"undefined"` (ไม่ใช่ `"null"`) ทำให้ guard `NULLIF($n,'null')` ที่ใช้กันปัญหา null-stringification เดิมจับไม่ได้ แล้ว cast เป็น `numeric` พัง — แก้ด้วยฟังก์ชัน `n(v)` เล็กๆ ใน Code node ที่ coalesce `undefined` → `null` ให้ชัดเจนก่อนส่งเข้า SQL เสมอ; และพบว่าคอลัมน์ TEXT ที่ nullable (`product_id`, `best_for`, `laboratory`, `flocculation`, `style_name`, `yeast_name`) ก็ต้องครอบด้วย `NULLIF($n,'null')` เหมือนกัน (ไม่ใช่แค่คอลัมน์ numeric) ไม่งั้น insert literal string `"null"` แทนที่จะเป็น NULL จริง — ทดสอบ insert ข้อมูลจริงทั้ง 14 recipes + 3 yeasts ผ่าน transaction แบบ rollback บน VPS แล้วผ่านหมด ก่อน commit โค้ด
+
+### 8.2 "Discord Command Intake" — 🔴 **เลิกใช้แล้ว (unpublish 15 ส.ค., เอาไฟล์ออกจาก repo 18 ส.ค.)** ถูกแทนที่ด้วย 8.5
+
+คำสั่ง `!ferment start ...` / `!ferment stop ...` แบบ text ไม่ใช้แล้ว ให้ใช้ `/ferment_start` `/ferment_stop` `/ferment_status` (slash command, ข้อ 8.5) แทนทั้งหมด — workflow ตัวจริงบน n8n ยัง unpublish ค้างไว้เฉยๆ (ไม่มี CLI ลบ workflow ได้ ต้องลบผ่าน UI เอง ถ้าต้องการ) แต่ **เอาไฟล์ `workflows/Discord Command Intake.json` ออกจาก repo แล้ว** (18 ส.ค., decluttering) ไม่ track/backup ต่อ — เนื้อหาด้านล่างเก็บไว้เป็นบันทึกประวัติเฉยๆ ดูโค้ดจริงได้จาก git history ก่อน commit ที่ลบไฟล์นี้ออก
 
 ✅ สร้างเสร็จ + ทดสอบผ่านแล้ว (start / stop / backdate ครบ) — ตอนที่ยังใช้งานอยู่
 
@@ -414,6 +424,8 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - `PATCH .../messages/@original` ตอบ "Unknown Webhook" ทั้งที่ token/application_id ถูกทุกอย่าง — สาเหตุจริงคือ body mode "Using Fields Below" ของ HTTP Request node ไม่ได้ serialize เป็น JSON จริง (ไม่มี `Content-Type: application/json`, request ออกไปแบบ `json:false`) ต้องเปลี่ยนเป็น **Body Content Type: Raw + `application/json`** พร้อม `JSON.stringify(...)` เอง ถึงจะผ่าน
 - reset `bot_state` เป็น `'0'` ตอนเคลียร์ DB ทำให้ Discord Command Intake (workflow แบบ polling เดิม) replay ข้อความเก่าซ้ำ — ไม่เกี่ยวกับ slash command แต่กระทบ batch ซ้อนกันถ้าเผลอรันทั้งสอง workflow พร้อมกันตอน DB ว่าง ระวังจุดนี้เวลาเคลียร์ข้อมูลอีก
 
+**เพิ่ม param `recipe` ใน `/ferment_start` (18 ส.ค.)**: optional, ผูก batch กับ recipe ที่ sync มาจาก Brewfather (ดูข้อ 8.1) — `Create Batch` เพิ่ม CTE `matched_recipe` match ชื่อแบบ `trim(lower(...))` (กัน case/whitespace ไม่ตรง) แล้ว set `batches.recipe_id` ถ้าเจอ `Build Followup Message` โชว์ชื่อ recipe/style/OG-FG ตามสูตรกลับไปถ้า match ได้ หรือเตือนว่าไม่พบ recipe (พร้อมชื่อที่พิมพ์มา) ถ้าใส่ชื่อมาแต่หาไม่เจอ — ไม่ block การสร้าง batch แม้ recipe จะหาไม่เจอหรือไม่ได้ใส่มาเลย ทดสอบ query จริงกับข้อมูล Brewfather ที่ sync มาแล้วผ่าน transaction rollback บน VPS (match "khelang brew weizen" ตัวพิมพ์เล็ก/มีช่องว่างนำหน้า-ท้ายเจอ record "Khelang Brew Weizen" ถูกต้อง)
+
 ---
 
 ## 9. กรอบ 6 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
@@ -441,6 +453,7 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - #34 ทดสอบระบบจริงกับ Pill01/Pill02 — 🟡 DB เพิ่งเคลียร์ล่าสุด 15 ส.ค. รอผู้ใช้เริ่มลงทะเบียน batch ใหม่ผ่าน `/ferment_start`
 - #35 Discord slash command (`/ferment_start`, `/ferment_stop`) — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
 - #36 `/ferment_status` + auto-resolve controller จาก RAPT pairing — ✅ เสร็จ ทดสอบผ่าน — 15 ส.ค.
+- #37 Brewfather recipes/yeasts cache (`Sync Devices` เพิ่ม fetch, `/ferment_start` param `recipe`) — 🟡 สร้างเสร็จ ทดสอบ SQL/API จริงแล้ว รอ reimport + ทดสอบผ่าน Discord จริง — 18 ส.ค.
 
 ---
 
@@ -458,10 +471,10 @@ Repo: `github.com/puatham/khelangbrewpub` (private)
 - `docker-compose.yml` — compose file ที่ deploy จริงบน VPS (traefik + n8n + postgres, bind mount ที่ `./data/`)
 - `.env` — ค่า config จริง **อยู่ใน `.gitignore` ไม่ขึ้น git**
 - `.env.example` — โครงเปล่าไว้ให้ก๊อปไปทำ `.env`
-- `schema.sql` — DDL 7 ตารางครบ รันได้เลย (มี index ของ readings + seed `bot_state`)
+- `schema.sql` — DDL 9 ตารางครบ รันได้เลย (มี index ของ readings + seed `bot_state`)
 - `er-diagram.mermaid` — ER diagram schema เต็ม
 - `backup-workflows.sh` — export workflow จาก n8n ลง `workflows/` แล้ว commit ให้ (ดูข้อ 13)
-- `clear-data.sh` — เคลียร์ข้อมูลทดสอบทั้งหมดใน Postgres กลับเป็น DB ว่างเปล่า (ใช้ระหว่าง dev/test เท่านั้น) รันจากเครื่อง **local** ได้เลย (`./clear-data.sh` — ssh ไปเคลียร์บน VPS ให้ ผ่าน ssh host `ferment-vps`, ถามยืนยันก่อนเสมอ นอกจากใส่ `--yes`) หรือรันตรงบน VPS เองก็ได้ด้วย `--local`
+- `clear-data.sh` — เคลียร์ข้อมูลทดสอบทั้งหมดใน Postgres กลับเป็น DB ว่างเปล่า (ใช้ระหว่าง dev/test เท่านั้น) รันจากเครื่อง **local** ได้เลย (`./clear-data.sh` — ssh ไปเคลียร์บน VPS ให้ ผ่าน ssh host `ferment-vps`, ถามยืนยันก่อนเสมอ นอกจากใส่ `--yes`) หรือรันตรงบน VPS เองก็ได้ด้วย `--local` — **ไม่แตะ `recipes`/`yeasts`** โดย default (ข้อมูลอ้างอิงจาก Brewfather ไม่ใช่ข้อมูลทดสอบต่อรอบ) ใส่ `--with-recipes` ถ้าต้องการเคลียร์ด้วยจริงๆ
 - `workflows/` — n8n workflow ที่ export ไว้ **เป็นแหล่งจริง (source of truth)** ตรงกับของบน n8n เป๊ะทุกครั้งที่ backup — **ห้ามแก้ไฟล์ในนี้ด้วยมือ** ให้แก้ที่ n8n แล้วรัน backup แทน
 - `README.md` — ไฟล์นี้
 

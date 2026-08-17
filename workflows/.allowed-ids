@@ -6,6 +6,6 @@
 # backup รอบถัดไปจะกรองมันทิ้ง
 
 dfU7lACidEI47NeF   # Sync Devices (task #30)
-CEgY6ZpFNf1WeQ4n   # Discord Command Intake (task #31)
 lH71jKXSOLtyevh6   # Phase Analysis Cron (task #32)
 DiabUYq10uXnbYgy   # Discord Interactions Webhook (task #35)
+# CEgY6ZpFNf1WeQ4n Discord Command Intake (task #31) — เลิกใช้แล้ว (retired 15 ส.ค., เอาไฟล์ออกจาก repo 18 ส.ค.) แทนที่ด้วย task #35 ไม่ track ต่อ แต่ workflow ตัวจริงบน n8n ยัง unpublish ค้างไว้เฉยๆ (ไม่มี CLI ลบ workflow ได้ ต้องลบผ่าน UI เอง ถ้าต้องการ)

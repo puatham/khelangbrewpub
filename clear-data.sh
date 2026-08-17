@@ -12,12 +12,16 @@
 #   ./clear-data.sh                      ssh ไปเคลียร์บน VPS (ferment-vps) ถามยืนยันก่อน
 #   ./clear-data.sh --yes                เหมือนบนแต่ไม่ถามยืนยัน (ใช้ตอน automate)
 #   ./clear-data.sh --local              รันตรงบนเครื่องนี้เลย (ใช้ตอน login อยู่บน VPS แล้ว)
+#   ./clear-data.sh --with-recipes       เคลียร์ recipes/yeasts (Brewfather cache) ด้วย — ปกติไม่แตะ (ดูข้อ 1)
 #   REMOTE_HOST=other-host ./clear-data.sh   ระบุ ssh host เอง (ค่า default: ferment-vps)
 #
 # สิ่งที่ทำ:
-#   1. TRUNCATE ตารางข้อมูลทั้งหมด (devices, batches, pill_readings,
+#   1. TRUNCATE ตารางข้อมูล batch ทดสอบ (devices, batches, pill_readings,
 #      temp_controller_readings, phase_log, control_log) พร้อม RESTART IDENTITY
-#      (ตาราง bot_state ไม่ถูก TRUNCATE เพราะต้องคุม cursor เอง ดูข้อ 2)
+#      — "recipes"/"yeasts" (Brewfather cache) **ไม่ถูก TRUNCATE โดย default**
+#      เพราะเป็นข้อมูลอ้างอิง (recipe book) ไม่ใช่ข้อมูลทดสอบต่อรอบ ใช้
+#      --with-recipes ถ้าต้องการเคลียร์ด้วยจริงๆ (ตาราง bot_state ก็ไม่ถูก
+#      TRUNCATE เหมือนกันเพราะต้องคุม cursor เอง ดูข้อ 2)
 #   2. reset bot_state.last_discord_message_id เป็น Discord snowflake ของเวลา
 #      ปัจจุบัน (ไม่ใช่ '0') — กัน Discord Command Intake (ถ้ายัง publish อยู่)
 #      replay ข้อความเก่าทั้งหมดในแชทซ้ำหลังเคลียร์ (ดู README ข้อ 8.3/8.5)
@@ -38,11 +42,13 @@ REMOTE_DIR="${REMOTE_DIR:-/docker/ferment-agent}"
 
 RUN_LOCAL=0
 CONFIRM=1
+WITH_RECIPES=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --local)   RUN_LOCAL=1 ;;
-    --yes|-y)  CONFIRM=0 ;;
-    -h|--help) sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --local)         RUN_LOCAL=1 ;;
+    --yes|-y)        CONFIRM=0 ;;
+    --with-recipes)  WITH_RECIPES=1 ;;
+    -h|--help) sed -n '3,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ไม่รู้จัก option: $1 (ดู --help)" >&2; exit 2 ;;
   esac
   shift
@@ -70,10 +76,19 @@ remote_exec "$DC_CMD ps --status running --services" 2>/dev/null | grep -qx "$PG
     exit 1
   }
 
+TABLES="control_log, phase_log, temp_controller_readings, pill_readings, batches, devices"
+COUNT_EXTRA=""
+if [ "$WITH_RECIPES" -eq 1 ]; then
+  TABLES="$TABLES, recipes, yeasts"
+  COUNT_EXTRA="UNION ALL SELECT 'recipes', count(*) FROM recipes
+UNION ALL SELECT 'yeasts', count(*) FROM yeasts"
+fi
+
 if [ "$CONFIRM" -eq 1 ]; then
   TARGET_DESC="DB '$POSTGRES_DB'"
   [ "$RUN_LOCAL" -eq 1 ] || TARGET_DESC="$TARGET_DESC บน '$REMOTE_HOST'"
-  echo "จะ TRUNCATE ตาราง devices, batches, pill_readings, temp_controller_readings, phase_log, control_log ทั้งหมดใน $TARGET_DESC (แก้คืนไม่ได้)"
+  echo "จะ TRUNCATE ตาราง $TABLES ทั้งหมดใน $TARGET_DESC (แก้คืนไม่ได้)"
+  [ "$WITH_RECIPES" -eq 1 ] || echo "(recipes/yeasts จะไม่ถูกแตะ — ใช้ --with-recipes ถ้าต้องการเคลียร์ด้วย)"
   read -r -p "พิมพ์ 'yes' เพื่อยืนยัน: " ans
   [ "$ans" = "yes" ] || { echo "ยกเลิก"; exit 0; }
 fi
@@ -83,14 +98,15 @@ fi
 SNOWFLAKE="$(python3 -c 'import time; print((int(time.time()*1000) - 1420070400000) << 22)')"
 
 SQL="$(cat <<SQLEOF
-TRUNCATE TABLE control_log, phase_log, temp_controller_readings, pill_readings, batches, devices RESTART IDENTITY;
+TRUNCATE TABLE $TABLES RESTART IDENTITY;
 UPDATE bot_state SET value = '$SNOWFLAKE' WHERE key = 'last_discord_message_id';
 SELECT 'batches' t, count(*) FROM batches
 UNION ALL SELECT 'devices', count(*) FROM devices
 UNION ALL SELECT 'pill_readings', count(*) FROM pill_readings
 UNION ALL SELECT 'temp_controller_readings', count(*) FROM temp_controller_readings
 UNION ALL SELECT 'phase_log', count(*) FROM phase_log
-UNION ALL SELECT 'control_log', count(*) FROM control_log;
+UNION ALL SELECT 'control_log', count(*) FROM control_log
+$COUNT_EXTRA;
 TABLE bot_state;
 SQLEOF
 )"
