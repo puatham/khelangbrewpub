@@ -340,7 +340,10 @@
         160
       ],
       "id": "46b235bd-6246-4701-b98a-32ad9271e26d",
-      "name": "Send Followup"
+      "name": "Send Followup",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
