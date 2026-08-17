@@ -1338,6 +1338,104 @@
       ],
       "id": "a1b2c3d4-3333-4444-8555-966677778888",
       "name": "Build Recipes Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1d2e3f4-5678-4901-a234-bcdef0123456",
+              "leftValue": "={{ $json.interaction.type }}",
+              "rightValue": 4,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        550
+      ],
+      "id": "c1d2e3f4-1111-4222-8333-944455556677",
+      "name": "Is Autocomplete?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const interaction = $json.interaction;\nconst options = (interaction.data && interaction.data.options) || [];\nconst focused = options.find(o => o.focused) || {};\nreturn [{ json: { field: focused.name || null, partial: focused.value || '' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        550
+      ],
+      "id": "c1d2e3f4-2222-4333-8444-955566667788",
+      "name": "Parse Autocomplete Request"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT jsonb_agg(name) AS names FROM (\n  SELECT name FROM recipes\n  WHERE name ILIKE '%' || $1 || '%'\n  ORDER BY name\n  LIMIT 25\n) t;",
+        "options": {
+          "queryReplacement": "={{$json.partial}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1160,
+        550
+      ],
+      "id": "c1d2e3f4-3333-4444-8555-966677778899",
+      "name": "Search Recipes For Autocomplete",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst names = row.names || [];\nconst choices = names.map(n => {\n  const label = n.length > 100 ? n.slice(0, 100) : n;\n  return { name: label, value: label };\n});\nreturn [{ json: { choices } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        550
+      ],
+      "id": "c1d2e3f4-4444-4555-8666-977788889900",
+      "name": "Build Autocomplete Choices"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"type\": 8, \"data\": {\"choices\": $json.choices}} }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1600,
+        550
+      ],
+      "id": "c1d2e3f4-5555-4666-8777-988899990011",
+      "name": "Respond Autocomplete"
     }
   ],
   "connections": {
@@ -1392,7 +1490,7 @@
         ],
         [
           {
-            "node": "Is Command?",
+            "node": "Is Autocomplete?",
             "type": "main",
             "index": 0
           }
@@ -1974,6 +2072,57 @@
         [
           {
             "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Autocomplete?": {
+      "main": [
+        [
+          {
+            "node": "Parse Autocomplete Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Autocomplete Request": {
+      "main": [
+        [
+          {
+            "node": "Search Recipes For Autocomplete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Recipes For Autocomplete": {
+      "main": [
+        [
+          {
+            "node": "Build Autocomplete Choices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Autocomplete Choices": {
+      "main": [
+        [
+          {
+            "node": "Respond Autocomplete",
             "type": "main",
             "index": 0
           }
