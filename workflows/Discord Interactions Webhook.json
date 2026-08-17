@@ -1246,7 +1246,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cmd = $('Parse Component Interaction').first().json;\nconst batch = $('Get Batch By Id').first().json;\n\nconst oldText = batch.current_target != null ? batch.current_target + '°C' : 'ไม่มีข้อมูลเดิม';\n\nconst content = '✅ ปรับ target: ' + (batch.beer_name || ('batch ' + cmd.batch_id)) + ' (Controller: ' + (batch.controller_name || '-') + ')\\n'\n  + oldText + ' → ' + cmd.target_temp + '°C'\n  + '\\nเหตุผล: ' + (cmd.remark || '-')\n  + '\\nยืนยันโดย: ' + cmd.requested_by;\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+        "jsCode": "const cmd = $('Parse Component Interaction').first().json;\nconst batch = $('Get Batch By Id').first().json;\n\nconst oldText = batch.current_target != null ? Number(batch.current_target).toFixed(2) + '°C' : 'ไม่มีข้อมูลเดิม';\n\nconst content = '✅ ปรับ target: ' + (batch.beer_name || ('batch ' + cmd.batch_id)) + ' (Controller: ' + (batch.controller_name || '-') + ')\\n'\n  + oldText + ' → ' + cmd.target_temp + '°C'\n  + '\\nเหตุผล: ' + (cmd.remark || '-')\n  + '\\nยืนยันโดย: ' + cmd.requested_by;\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
