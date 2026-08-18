@@ -474,6 +474,8 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 
 ทดสอบก่อน deploy ครบ: `Generate Simulated Days` ให้ 9 วันถูกต้อง (10-18 ส.ค.), SQL จริงบน VPS ยืนยัน `pill_series` โตขึ้นตามวันจำลอง (9 จุดวันแรก → 487 จุดวันสุดท้าย) และ `start_date`/`stable_gap_c` เปลี่ยนตาม cutoff ถูกต้อง, ทดสอบทั้ง pipeline (`Build AI Prompt` → mock Claude response → `Parse AI Response` → `Build Test Summary Message`) ด้วยข้อมูลจริงจาก DB ได้ข้อความสุดท้ายถูกต้องครบ (เฟส, ตัวเลขปัดทศนิยม, วันที่จำลองแสดงถูก) — ยังไม่ได้ยิง Claude API จริงเพราะมีค่าใช้จ่าย รอรันจริงผ่าน Discord ครั้งแรกพร้อมกัน
 
+**บั๊กที่เจอตอนรันจริงครั้งแรก (18 ส.ค.)**: ยิงมาแค่ 1 ข้อความ (ควรได้ 9) แถมวันที่คลาดเคลื่อนไป 1 วัน (โชว์ 09/08 แทน 10/08) — เช็ค execution data บน VPS โดยตรงเจอว่า `Parse AI Response` มี 9 item ถูกต้อง แต่ `Build Test Summary Message` เหลือ 1 item เพราะ Code node import มา default โหมด **"Run Once for All Items"** แล้วโค้ดดันใช้ `$input.first().json` (อ่านแค่ item แรก) แทนที่จะ loop `$input.all()` เหมือน `Build AI Prompt`/`Parse AI Response` — item ที่เหลือหายไปเงียบๆ ไม่ error ให้เห็น (ตรงกับ gotcha ที่เคยจดไว้แล้วเรื่อง default mode ของ Code node ที่ import มา แต่คราวนี้พลาดพลั้งไปเขียนโค้ดผิด pattern เอง) ส่วนวันที่เพี้ยนเพราะ `cursor.getDate()/getMonth()/getFullYear()` อ่าน timezone ท้องถิ่นของ process (n8n container รันเป็น UTC ไม่ใช่ Asia/Bangkok) แก้ทั้งสองจุด: เปลี่ยนเป็น loop `$input.all()` + `$('Get Simulated Readings').itemMatching(idx)` ให้แต่ละวันจับคู่ label ถูกต้อง, บวก offset +7 ชม. ก่อนอ่านวันที่กัน timezone ผิด (ทดสอบแล้วได้ผลเหมือนกันไม่ว่า process จะตั้ง `TZ=UTC`/`Asia/Bangkok`/`America/New_York`)
+
 ---
 
 ## 9. กรอบ 6 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
