@@ -1,0 +1,60 @@
+{
+  "name": "Error Alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "id": "e1a2b3c4-0000-4000-8000-000000000001",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error Trigger ส่งมา 1 item ต่อ 1 execution ที่พังเสมอ — $input.first() ปลอดภัย\n// (ไม่เข้าเคส multi-item drop เพราะ trigger ชนิดนี้มี event เดียวต่อการ fire)\nconst e = $input.first().json;\nconst wfName = (e.workflow && e.workflow.name) || 'ไม่ทราบชื่อ workflow';\nconst exec = e.execution || {};\nconst err = exec.error || {};\nconst nodeName = (err.node && err.node.name) || exec.lastNodeExecuted || '-';\nconst message = err.message || 'ไม่มีรายละเอียด error';\nconst execId = exec.id || '-';\nconst mode = exec.mode || '-';\n\nlet content = '🚨 ระบบพัง: workflow \"' + wfName + '\"'\n  + '\\nnode: ' + nodeName\n  + '\\nerror: ' + message\n  + '\\nexecution: ' + execId + ' (' + mode + ')'\n  + (exec.url ? ('\\n' + exec.url) : '');\n\n// กัน error message ยาวผิดปกติเกินลิมิต Discord 2000 ตัวอักษร\nif (content.length > 1900) content = content.slice(0, 1900) + '…';\n\nreturn [{ json: { content } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [224, 0],
+      "id": "e1a2b3c4-0000-4000-8000-000000000002",
+      "name": "Build Error Message"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ content: $json.content }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [448, 0],
+      "id": "e1a2b3c4-0000-4000-8000-000000000003",
+      "name": "Send Error Alert",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [[{ "node": "Build Error Message", "type": "main", "index": 0 }]]
+    },
+    "Build Error Message": {
+      "main": [[{ "node": "Send Error Alert", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": { "instanceId": "error-alert-tool" }
+}

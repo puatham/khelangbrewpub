@@ -8,5 +8,17 @@
 dfU7lACidEI47NeF   # Sync Devices (task #30)
 lH71jKXSOLtyevh6   # Phase Analysis Cron (task #32)
 DiabUYq10uXnbYgy   # Discord Interactions Webhook (task #35)
-# TODO: เติม id ตรงนี้หลัง import "Phase Analysis Backtest" (task #41) ครั้งแรก — เครื่องมือ backtest ทดสอบว่า cron จะวิเคราะห์อะไรแต่ละวันจำลอง ไม่ active/ไม่มี trigger จริง รันมือผ่าน Manual Trigger เท่านั้น
+Lm8O1NyDrB3gnwXf   # Phase Analysis Backtest (task #41) — เครื่องมือ backtest ทดสอบว่า cron จะวิเคราะห์อะไรแต่ละวันจำลอง ไม่ active/ไม่มี trigger จริง รันมือผ่าน Manual Trigger เท่านั้น (id ดึงจาก n8n DB จริง 19 ส.ค.)
+# TODO: เติม id ตรงนี้หลัง import "Error Alert" (task #53) ครั้งแรก — workflow ดัก execution ที่
+# fail จากทุก workflow แล้วแจ้ง Discord — import แล้วต้องไปตั้ง Settings > Error Workflow ของ
+# Phase Analysis Cron / Discord Interactions Webhook / Sync Devices ให้ชี้มาที่ workflow นี้ด้วย
+# (ตั้งใน UI ได้ แต่ต้องบันทึก id ลงที่นี่ + แจ้งให้เพิ่ม settings.errorWorkflow ในไฟล์ JSON ด้วย
+# กัน reimport ทับ — ดูบทเรียน REPLACE_WITH_SHARED_WORKFLOW_ID)
+wdd07vd16VnMw2de   # Phase Analysis Engine (task #43) — sub-workflow กลาง (Build AI Prompt →
+                   # Call Claude → Parse AI Response) เรียกจาก Phase Analysis Cron/Backtest
+                   # ผ่าน node "Call Phase Analysis" — id นี้ hardcode ไว้ใน workflowId.value
+                   # ของ node นั้นในทั้งสองไฟล์แล้ว (18 ส.ค., แก้หลังพบว่า reimport ไฟล์ทับค่าที่
+                   # เคยแก้ตรงในหน้า n8n editor กลับเป็น placeholder REPLACE_WITH_SHARED_WORKFLOW_ID
+                   # จนพัง — ถ้า id ของ "Phase Analysis Engine" เปลี่ยน (เช่น ลบ/สร้างใหม่) ต้องแก้
+                   # workflowId.value ในไฟล์ JSON ตรงๆ ทั้งสองไฟล์ด้วย ไม่ใช่แก้แค่ในหน้า editor)
 # CEgY6ZpFNf1WeQ4n Discord Command Intake (task #31) — เลิกใช้แล้ว (retired 15 ส.ค., เอาไฟล์ออกจาก repo 18 ส.ค.) แทนที่ด้วย task #35 ไม่ track ต่อ แต่ workflow ตัวจริงบน n8n ยัง unpublish ค้างไว้เฉยๆ (ไม่มี CLI ลบ workflow ได้ ต้องลบผ่าน UI เอง ถ้าต้องการ)
