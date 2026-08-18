@@ -300,6 +300,10 @@
               "value": "={{ 8192 }}"
             },
             {
+              "name": "thinking",
+              "value": "={{ {\"type\": \"disabled\"} }}"
+            },
+            {
               "name": "messages",
               "value": "={{ [{role: 'user', content: $json.prompt}] }}"
             }
