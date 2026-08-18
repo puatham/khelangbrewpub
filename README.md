@@ -459,6 +459,23 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 
 ---
 
+### 8.6 "Phase Analysis Backtest" — 🟡 สร้างเสร็จ ทดสอบ pipeline เต็มแล้ว รอรันจริงผ่าน Discord (task #41, 18 ส.ค.)
+
+เครื่องมือทดสอบ ไม่ใช่ production feature — ไฟล์แยก `workflows/Phase Analysis Backtest.json`, **ไม่ active ไม่มี trigger จริง** รันเองผ่าน Manual Trigger เท่านั้น ไม่แตะ/ไม่เขียนกลับ batch จริง (ไม่มี `Insert Phase Log`/`Update Batch Phase` เหมือน `Phase Analysis Cron`)
+
+**โจทย์**: อยากรู้ว่าถ้า batch Hazy DIPA (ข้อมูล Pill/Controller/recipe จริงที่มีอยู่แล้วใน DB) สมมติว่า start วันที่ที่กำหนดเอง (ไม่ใช่ `start_date` จริงของ batch) ระบบจะวิเคราะห์/ตอบอะไรบ้างในแต่ละวันที่ผ่านไป จนถึงวันนี้ — โดยใช้ logic วิเคราะห์ **ชุดเดียวกับ `Phase Analysis Cron` เป๊ะๆ** (copy `Build AI Prompt`/`Parse AI Response` jsCode มาตรงๆ กันความคลาดเคลื่อนจากการเขียนใหม่)
+
+**Pipeline**: `Manual Trigger` → `Generate Simulated Days` (Code — สร้าง item ละ 1 วันจำลอง จาก `OVERRIDE_START_DATE`/`BATCH_ID` ที่แก้ค่าได้ตรงหัวไฟล์ ถึงวันนี้) → `Get Simulated Readings` (Postgres — ดัดแปลงจาก `Get Latest Readings` ของ cron จริง แต่ตัด pill/controller/control series ให้เห็นแค่ข้อมูลที่ **`time_utc <= cutoff` ของวันนั้นจริงๆ** และใช้ `start_date`/`cutoff` ที่ override แทนของจริงทั้งหมด) → `Build AI Prompt` → `Call Claude` (config เดียวกับตัวจริงรวม `thinking: disabled` ที่เพิ่งแก้) → `Parse AI Response` → `Build Test Summary Message` (Code ใหม่ — สรุปเป็น **ข้อความเดียวต่อวัน** ไม่แยก section เหมือน production กันสแปมช่อง ขึ้นต้นด้วย `🧪 TEST BACKTEST | จำลองผ่านไปถึงวันที่ dd/mm/yyyy`) → `Send Test Update` (POST เข้าช่อง Discord เดียวกับที่ใช้จริง)
+
+**จุดที่ต้องเบี่ยงจากโค้ดจริงของ `Phase Analysis Cron` (จงใจ ไม่ใช่ bug)**:
+- `Build AI Prompt` คำนวณ `hoursSinceStart` จาก `Date.now()` เดิม (เวลาจริงตอนรัน) — สำหรับ backtest ต้องใช้ "เวลาปัจจุบันจำลอง" (`cutoff` ของวันนั้น) แทน ไม่งั้นทุกวันจำลองจะเห็น `hoursSinceStart` เป็นของวันนี้จริงเหมือนกันหมด แก้จุดเดียวเป็น `new Date(batch.cutoff).getTime()` มี comment กำกับไว้ในไฟล์ชัดเจนว่าเบี่ยงจากต้นฉบับตรงไหน
+- `current_phase` ใส่ placeholder `'ไม่ทราบ (backtest mode)'` คงที่ทุกวัน แทนที่จะ track เฟสที่ตรวจจับได้ของวันก่อนหน้าต่อเนื่องกัน (การทำแบบนั้นต้องให้แต่ละวัน "จำ" ผลวันก่อนซึ่งซับซ้อนเกินความจำเป็นสำหรับเครื่องมือทดสอบครั้งเดียว) — ไม่กระทบการตัดสินเฟสหลัก เพราะ prompt ให้ AI ดูกราฟทั้งเส้นเป็นหลักอยู่แล้ว ไม่ได้พึ่ง `current_phase` เป็นหลักฐานตัดสิน
+- `simulated_day_label` (วันที่จำลองไว้แสดงในข้อความ) ต้องส่งผ่าน column จริงใน SQL แล้วอ้างอิงกลับด้วย `$('Get Simulated Readings').first().json` ใน `Build Test Summary Message` แทนที่จะหวังให้ `Parse AI Response` (copy จาก production, output field ตายตัว) ส่งต่อให้ — เจอจาก test จริงว่าค่าหายไปเป็น `-` ตอนแรก
+
+ทดสอบก่อน deploy ครบ: `Generate Simulated Days` ให้ 9 วันถูกต้อง (10-18 ส.ค.), SQL จริงบน VPS ยืนยัน `pill_series` โตขึ้นตามวันจำลอง (9 จุดวันแรก → 487 จุดวันสุดท้าย) และ `start_date`/`stable_gap_c` เปลี่ยนตาม cutoff ถูกต้อง, ทดสอบทั้ง pipeline (`Build AI Prompt` → mock Claude response → `Parse AI Response` → `Build Test Summary Message`) ด้วยข้อมูลจริงจาก DB ได้ข้อความสุดท้ายถูกต้องครบ (เฟส, ตัวเลขปัดทศนิยม, วันที่จำลองแสดงถูก) — ยังไม่ได้ยิง Claude API จริงเพราะมีค่าใช้จ่าย รอรันจริงผ่าน Discord ครั้งแรกพร้อมกัน
+
+---
+
 ## 9. กรอบ 6 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
 
 อ้างอิงจาก BJCP Yeast & Fermentation guide, John Palmer "How to Brew", Brew Your Own Fermentation Timeline, และเอกสาร RAPT เอง (ไม่ได้อ้างอิงจากประสบการณ์ทำเบียร์ก่อนหน้าของโปรเจกต์นี้ — ตั้งใจ research จากแหล่งกลางเพื่อความแม่นยำ)
@@ -488,6 +505,7 @@ Node หลัก: `Webhook`(rawBody) → `Verify Signature`(Code) → `Signatur
 - #38 แนะนำ target ตู้ควบคุมจากแผน recipe + ปุ่ม Discord ยืนยันปรับอุณหภูมิจริง — 🟡 สร้างเสร็จ ทดสอบ SQL/logic/payload ครบแล้ว เจอ+แก้บั๊ก ordering/format/retry/deactivate-reactivate ครบแล้ว รอกดปุ่มจริงยืนยันรอบสุดท้ายหลัง reimport+reactivate — 18 ส.ค.
 - #39 `/ferment_recipes` list ชื่อ recipe จาก Brewfather cache พร้อม search — 🟡 สร้างเสร็จ ทดสอบ SQL จริงบน VPS แล้ว รอ reimport (ทั้ง `Register Slash Commands` รันใหม่ + `Discord Interactions Webhook` reimport แล้ว **Deactivate/Activate ใหม่**) — 18 ส.ค.
 - #40 Autocomplete `/ferment_start recipe` (dropdown ดึงจาก DB สดๆ) — 🟡 สร้างเสร็จ ทดสอบ SQL/logic จริงแล้ว รอ reimport ทั้งสองไฟล์ + **Deactivate/Activate ใหม่** — 18 ส.ค.
+- #41 `Phase Analysis Backtest` เครื่องมือจำลองวิเคราะห์ทีละวัน — 🟡 สร้างเสร็จ ทดสอบ pipeline เต็มด้วยข้อมูลจริง (ยกเว้นยิง Claude API จริง) รอ import + รันมือครั้งแรก — 18 ส.ค.
 
 ---
 
