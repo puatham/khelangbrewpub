@@ -167,7 +167,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Latest Readings').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: batch.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
+        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // อ้างอิงด้วย index ตรงๆ แทน itemMatching เพราะ Get Active Batches ให้ 1 item ต่อ 1 batch\n  // เรียงลำดับเดิม และ telemetry node ยิง 1 request ต่อ item ตามลำดับนั้นเป๊ะ — เลี่ยง\n  // pairedItem ที่เปราะเวลามีหลาย batch พร้อมกัน\n  const batch = $('Get Active Batches').all()[idx].json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: batch.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -180,7 +180,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  const batch = $('Get Latest Readings').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
+        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // อ้างอิงด้วย index ตรงๆ แทน itemMatching เพราะ Get Active Batches ให้ 1 item ต่อ 1 batch\n  // เรียงลำดับเดิม และ telemetry node ยิง 1 request ต่อ item ตามลำดับนั้นเป๊ะ — เลี่ยง\n  // pairedItem ที่เปราะเวลามีหลาย batch พร้อมกัน\n  const batch = $('Get Active Batches').all()[idx].json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -550,6 +550,32 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// กู้ item context ของ batch กลับมาหลัง Postgres INSERT — INSERT ที่ไม่มี RETURNING จะ\n// ทับ $json ด้วยผลลัพธ์เปล่าและทำให้ pairedItem หลุด (บั๊กที่เคยเจอในข้อ 8.3) อ่านจาก\n// $('Get Active Batches').all() ตรงๆ ปลอดภัยเพราะอ้างอิง node ด้วยชื่อ ไม่พึ่ง pairedItem\n// และได้ item ครบทุก batch เรียงลำดับเดิมเสมอ\nreturn $('Get Active Batches').all().map(it => ({ json: it.json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        400
+      ],
+      "id": "a9b8c7d6-0000-4000-8000-000000000021",
+      "name": "Reload Batches"
+    },
+    {
+      "parameters": {
+        "jsCode": "// กู้ item context ของ batch กลับมาหลัง Postgres INSERT — INSERT ที่ไม่มี RETURNING จะ\n// ทับ $json ด้วยผลลัพธ์เปล่าและทำให้ pairedItem หลุด (บั๊กที่เคยเจอในข้อ 8.3) อ่านจาก\n// $('Get Active Batches').all() ตรงๆ ปลอดภัยเพราะอ้างอิง node ด้วยชื่อ ไม่พึ่ง pairedItem\n// และได้ item ครบทุก batch เรียงลำดับเดิมเสมอ\nreturn $('Get Active Batches').all().map(it => ({ json: it.json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ],
+      "id": "a9b8c7d6-0000-4000-8000-000000000022",
+      "name": "Reload Batches 2"
     }
   ],
   "connections": {
@@ -579,7 +605,7 @@
       "main": [
         [
           {
-            "node": "Get Latest Readings",
+            "node": "Get Pill Telemetry",
             "type": "main",
             "index": 0
           }
@@ -633,16 +659,6 @@
     "Get Latest Readings": {
       "main": [
         [
-          {
-            "node": "Get Pill Telemetry",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Controller Telemetry",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Add Analysis Time",
             "type": "main",
@@ -742,6 +758,50 @@
         [
           {
             "node": "Send Sensor Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Pill Readings": {
+      "main": [
+        [
+          {
+            "node": "Reload Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reload Batches": {
+      "main": [
+        [
+          {
+            "node": "Get Controller Telemetry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Controller Readings": {
+      "main": [
+        [
+          {
+            "node": "Reload Batches 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reload Batches 2": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Readings",
             "type": "main",
             "index": 0
           }

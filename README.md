@@ -371,7 +371,7 @@ Query Parameters: `{{$json.pill}}`
 
 ### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-19 nodes: `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน; adaptive telemetry fetch ที่ดึงจาก last-synced timestamp -3h ทำให้ระบบยังกัน gap ได้เองแม้ห่างขึ้น ไม่ต้องแก้อะไรเพิ่ม) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → แยก 3 สาย: (1) `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings`, (2) `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings`, (3) `Get Latest Readings`→`Build AI Prompt`→`Call Claude`→`Parse AI Response` → แยกเป็น 3 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase` ตรงๆ), `Approaching Transition?`(IF, true→`Update Prep Alert State` ตรงๆ), `Send Routine Update` (ยิงทุกรอบไม่มีเงื่อนไข)
+24 nodes (โครงสร้างหลัง task #59 — เดิมแยก 3 สายขนานจาก `Get Latest Readings` เปลี่ยนเป็นสายเดียวเรียงลำดับ): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings` → `Reload Batches` → `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings` → `Reload Batches 2` → **`Get Latest Readings`** (อ่าน DB หลัง insert เสร็จแล้ว) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Split Message Into Sections`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
 
 **รวมข้อความ Discord เหลือทางเดียว (เพิ่ม 18 ส.ค.)**: เดิมมี 3 message แยก (`Send Discord Alert` ตอนเฟสเปลี่ยน, `Send Prep Alert` ตอนใกล้เปลี่ยนเฟส, `Send Routine Update` ทุกรอบ) เนื้อหาซ้ำกันเกือบหมดเพราะ `Send Routine Update` เดิมก็มี reasoning + 🔜 prep guidance ครบอยู่แล้ว — ตัด `Send Discord Alert`/`Send Prep Alert` ออก (โหนดที่มันเคยพ่วงไว้คือ `Update Batch Phase`/`Update Prep Alert State` ยังเก็บไว้เหมือนเดิม แค่ต่อตรงจาก IF โหนดแทน) เหลือ `Send Routine Update` ยิงข้อความเดียวต่อรอบ พร้อมเพิ่มตัวบอกเฟสเปลี่ยน (`🔔 (เปลี่ยนจาก X)`) ต่อท้ายชื่อเฟสแทนที่จะแยกข้อความ
 
@@ -561,6 +561,20 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 
 ---
 
+### 8.9 แก้บั๊ก "AI วิเคราะห์ข้อมูลตามหลัง 1 รอบ cron" (task #59, 19 ส.ค.)
+
+**อาการ**: การวิเคราะห์เฟสใช้ข้อมูลเก่ากว่าความจริงถึง ~4 ชม. (1 รอบ cron เต็ม) ทุกครั้ง — กระทบ gating ของ diacetyl_rest/cold_crash โดยตรง เพราะเกณฑ์พวกนี้ตัดสินจาก "อุณหภูมิ Pill ล่าสุด" แต่ค่าที่ AI เห็นไม่ใช่ค่าล่าสุดจริง
+
+**สาเหตุ**: โครงสร้างเดิม `Get Active Batches` แตกเป็น 3 สายขนาน โดย `Get Latest Readings` (อ่าน DB) เป็นสายหนึ่งที่รัน**ก่อน** อีก 2 สายที่ fetch+insert telemetry จะทำงานเสร็จ — snapshot ที่ส่งให้ AI จึงไม่มีข้อมูลที่เพิ่ง insert ในรอบเดียวกันเลย ยืนยันจาก execution 461 จริง (รัน 12:00 น.): `Get Latest Readings` ที่ +1.31s, `Insert Pill Readings` ที่ +2.59s, `Insert Controller Readings` ที่ +5.67s, `Call Phase Analysis` ที่ +6.90s — เทียบข้อมูลจริงพบ Hazy DIPA: AI เห็นถึง 07:52 แต่รอบนั้น insert ถึง 11:53 = **หายไป 4.0 ชม.พอดี** (Weizen ไม่เห็น gap เพราะ Pill02 offline อยู่ ไม่มีข้อมูลใหม่ให้ตกหล่นตั้งแต่แรก)
+
+**การแก้**: เปลี่ยนจาก 3 สายขนานเป็น**สายเดียวเรียงลำดับ** ให้ DB read เกิดหลัง insert เสร็จทั้งคู่ (ดูผังใน 8.3) — เช็คแล้วว่า `Get Latest Readings` ต้องการเฉพาะ field ที่ `Get Active Batches` มีครบอยู่แล้ว จึงย้ายได้โดยไม่ต้องแก้ SQL เลย เพิ่ม Code node `Reload Batches` / `Reload Batches 2` (`return $('Get Active Batches').all()...`) คั่นหลัง INSERT แต่ละตัวเพื่อกู้ item context กลับมา — จำเป็นเพราะ Postgres INSERT ที่ไม่มี `RETURNING` จะทับ `$json` ด้วยผลลัพธ์เปล่าและทำให้ pairedItem หลุด (บั๊กที่เคยเจอในข้อ 8.3) การอ้าง `$('Get Active Batches').all()` ตรงๆ ปลอดภัยเพราะอ้างอิงด้วยชื่อ node ไม่พึ่ง pairedItem และได้ item ครบทุก batch เรียงลำดับเดิมเสมอ พร้อมกันนั้นเปลี่ยน `Format Pill/Controller Readings` จาก `$('Get Latest Readings').itemMatching(idx)` เป็น `$('Get Active Batches').all()[idx]` (index ตรงๆ แทน pairedItem ที่เปราะเวลามีหลาย batch)
+
+ทดสอบด้วย Node harness จำลอง 2 batch พร้อมกัน ยืนยัน `device_id`/`paired_temp_controller` ของแต่ละ reading ผูกกับ batch ที่ถูกต้อง ไม่สลับกัน + ตรวจอัตโนมัติทุก `$('...')` reference ในไฟล์ว่าชี้ไป node ที่รันก่อนหน้าเสมอตามลำดับใหม่
+
+**เจอเพิ่มระหว่างตรวจ (ยังไม่แก้)**: `Get Pill/Controller Telemetry` อ่าน `$json.pill_time_utc`/`controller_time_utc` เพื่อดึงเฉพาะข้อมูลใหม่ (adaptive fetch ตามที่ 8.3 เคยระบุ) แต่ `Get Latest Readings` **ไม่เคย return field พวกนี้** → เป็น `undefined` เสมอ → fallback ไปใช้ `start_date` ทุกครั้ง = ดึงประวัติทั้ง batch ใหม่หมดทุกรอบแล้ว insert ทับ (รอบที่ตรวจได้ 1,064 จุด ตั้งแต่วันเริ่ม batch) ยังทำงานถูกเพราะ insert เป็น idempotent แต่เปลือง RAPT API/DB และจะแย่ลงตามอายุ batch — แยกเป็นงานถัดไป
+
+---
+
 ## 9. กรอบ 7 เฟสการหมัก (ใช้เป็น prompt ให้ AI จำแนก)
 
 อ้างอิงจาก BJCP Yeast & Fermentation guide, John Palmer "How to Brew", Brew Your Own Fermentation Timeline, และเอกสาร RAPT เอง (ไม่ได้อ้างอิงจากประสบการณ์ทำเบียร์ก่อนหน้าของโปรเจกต์นี้ — ตั้งใจ research จากแหล่งกลางเพื่อความแม่นยำ)
@@ -609,6 +623,8 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 - #56 batch summary ตอน `/ferment_stop` — `Stop Batch` เปลี่ยนเป็น UPDATE+summary query เดียว (OG→FG, ABV, จำนวนวัน, ไทม์ไลน์เฟสจาก phase_log, จำนวนปรับ target) + แจ้ง "ไม่พบ batch active" ถ้าไม่มีอะไรให้หยุด (เดิมตอบว่าหยุดแล้วเสมอแม้ไม่มี batch) — ✅ เสร็จ ทดสอบ SQL จริงผ่าน transaction rollback รอ reimport `Discord Interactions Webhook` + Deactivate/Activate — 19 ส.ค.
 - #57 กันสร้าง batch ซ้ำ — `/ferment_start` กับ Pill ที่มี batch active อยู่แล้วจะไม่ insert แต่เตือนพร้อมชื่อ/วันเริ่มของ batch เดิม (เคยเกิดจริง: Hazy DIPA ถูก start ซ้ำ 18 ส.ค.) — ✅ เสร็จ ทดสอบ SQL จริงผ่าน rollback (Pill01 ติด Hazy DIPA → ไม่ insert + คืนข้อมูล batch เดิมถูกต้อง) รอ reimport `Discord Interactions Webhook` + Deactivate/Activate — 19 ส.ค.
 - #58 sync ค่า Backtest ที่แก้ manual ในหน้า editor กลับเข้าไฟล์ (BATCH_ID 1→2 ตาม live n8n, comment ที่ล้าสมัยแก้แล้ว) + เพิ่มชื่อ batch ใน header ข้อความ TEST BACKTEST กันสับสนว่ากำลัง test batch ไหน + เติม id `Lm8O1NyDrB3gnwXf` ของ Backtest ลง `.allowed-ids` — ✅ เสร็จ — 19 ส.ค.
+- #59 แก้บั๊ก AI วิเคราะห์ข้อมูลตามหลัง 1 รอบ cron (~4 ชม.) — เปลี่ยน `Phase Analysis Cron` จาก 3 สายขนานเป็นสายเดียวเรียงลำดับ ให้ `Get Latest Readings` อ่าน DB หลัง insert telemetry เสร็จ + เพิ่ม `Reload Batches` กู้ item context หลัง INSERT — ✅ เสร็จ ยืนยันบั๊กจาก execution 461 จริง (Hazy DIPA หายไป 4.0 ชม.พอดี) ทดสอบ harness 2 batch + ตรวจ reference ordering ทั้งไฟล์ รอ reimport `Phase Analysis Cron` — 19 ส.ค.
+- #60 (ค้าง) telemetry ดึงประวัติทั้ง batch ใหม่ทุกรอบ — `$json.pill_time_utc`/`controller_time_utc` เป็น undefined เสมอเพราะ `Get Latest Readings` ไม่ return field นี้ ทำให้ adaptive fetch ไม่ทำงานจริง fallback ไป `start_date` ตลอด (พบ 1,064 จุด/รอบ) ยังทำงานถูกเพราะ insert idempotent แต่เปลือง API/DB และแย่ลงตามอายุ batch — 🔵 ยังไม่แก้ พบ 19 ส.ค.
 
 ---
 
