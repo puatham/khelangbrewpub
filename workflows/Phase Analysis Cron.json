@@ -499,7 +499,8 @@
           "id": "t6ZZv3ZEHRRZX5Q2",
           "name": "Postgres account"
         }
-      }
+      },
+      "executeOnce": true
     },
     {
       "parameters": {
