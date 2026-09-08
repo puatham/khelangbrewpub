@@ -1,11 +1,15 @@
 {
+  "id": "XwfLoJXuD9Fk5nvn",
   "name": "Error Alert",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "e1a2b3c4-0000-4000-8000-000000000001",
       "name": "Error Trigger"
     },
@@ -15,7 +19,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [224, 0],
+      "position": [
+        224,
+        0
+      ],
       "id": "e1a2b3c4-0000-4000-8000-000000000002",
       "name": "Build Error Message"
     },
@@ -33,7 +40,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
-      "position": [448, 0],
+      "position": [
+        448,
+        0
+      ],
       "id": "e1a2b3c4-0000-4000-8000-000000000003",
       "name": "Send Error Alert",
       "credentials": {
@@ -49,12 +59,30 @@
   ],
   "connections": {
     "Error Trigger": {
-      "main": [[{ "node": "Build Error Message", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Error Message": {
-      "main": [[{ "node": "Send Error Alert", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
-  "meta": { "instanceId": "error-alert-tool" }
+  "meta": {
+    "instanceId": "error-alert-tool"
+  }
 }
