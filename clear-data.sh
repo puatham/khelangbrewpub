@@ -16,7 +16,7 @@
 #   REMOTE_HOST=other-host ./clear-data.sh   ระบุ ssh host เอง (ค่า default: ferment-vps)
 #
 # สิ่งที่ทำ:
-#   1. TRUNCATE ตารางข้อมูล batch ทดสอบ (devices, batches, pill_readings,
+#   1. TRUNCATE ตารางข้อมูล batch ทดสอบ (devices, batches, temp_alert_state, pill_readings,
 #      temp_controller_readings, phase_log, control_log) พร้อม RESTART IDENTITY
 #      — "recipes"/"yeasts" (Brewfather cache) **ไม่ถูก TRUNCATE โดย default**
 #      เพราะเป็นข้อมูลอ้างอิง (recipe book) ไม่ใช่ข้อมูลทดสอบต่อรอบ ใช้
@@ -76,7 +76,9 @@ remote_exec "$DC_CMD ps --status running --services" 2>/dev/null | grep -qx "$PG
     exit 1
   }
 
-TABLES="control_log, phase_log, temp_controller_readings, pill_readings, batches, devices"
+# temp_alert_state ต้องอยู่ในลิสต์ด้วย ไม่ใช่เพราะอยากล้าง แต่เพราะมี FK ชี้ไป batches
+# ถ้าไม่ใส่ TRUNCATE จะ error "cannot truncate a table referenced in a foreign key constraint"
+TABLES="control_log, phase_log, temp_controller_readings, pill_readings, temp_alert_state, batches, devices"
 COUNT_EXTRA=""
 if [ "$WITH_RECIPES" -eq 1 ]; then
   TABLES="$TABLES, recipes, yeasts"
