@@ -13,10 +13,11 @@ XwfLoJXuD9Fk5nvn   # Error Alert (task #53) — ดัก execution ที่ fa
                    # (id ดึงจาก n8n DB จริง 8 ก.ย. ตอนนี้ import แล้วและ active อยู่) ยังต้องเช็คว่า
                    # Settings > Error Workflow ของ Phase Analysis Cron / Telemetry Sync /
                    # Discord Interactions Webhook / Sync Devices ชี้มาที่ workflow นี้ครบทุกตัว
-# TODO: เติม id ตรงนี้หลัง import "Telemetry Sync" (task #65) ครั้งแรก — workflow ดึง telemetry
-# ของทุก Pill/ตู้ควบคุมทุก 15 นาที แยกออกมาจาก Phase Analysis Cron เพื่อให้เก็บข้อมูลต่อเนื่อง
-# ไม่ผูกกับรอบวิเคราะห์ 4 ชม. (ไม่มี workflow อื่นเรียกมันผ่าน id จึงไม่ต้องแก้ไฟล์ JSON ตัวอื่นตาม
-# แค่บันทึก id ไว้ให้ backup-workflows.sh เก็บไฟล์นี้ด้วย)
+Vys21RktOrDhUDe8   # Telemetry Sync (task #65) — ดึง telemetry ของทุก Pill/ตู้ควบคุมทุก 15 นาที
+                   # แยกออกมาจาก Phase Analysis Cron เพื่อให้เก็บข้อมูลต่อเนื่องไม่ผูกกับรอบ
+                   # วิเคราะห์ 4 ชม. (id ดึงจาก n8n DB จริง 8 ก.ย.) ไม่มี workflow อื่นเรียกมัน
+                   # ผ่าน id จึงไม่ต้องแก้ไฟล์ JSON ตัวอื่นตาม — **ต้อง Active เสมอ** เพราะ
+                   # Phase Analysis Cron ไม่ดึงข้อมูลเองแล้ว ถ้าตัวนี้ปิดจะไม่มีใครเก็บข้อมูลเลย
 wdd07vd16VnMw2de   # Phase Analysis Engine (task #43) — sub-workflow กลาง (Build AI Prompt →
                    # Call Claude → Parse AI Response) เรียกจาก Phase Analysis Cron/Backtest
                    # ผ่าน node "Call Phase Analysis" — id นี้ hardcode ไว้ใน workflowId.value
