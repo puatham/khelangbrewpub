@@ -371,7 +371,7 @@ Query Parameters: `{{$json.pill}}`
 
 ### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-24 nodes (โครงสร้างหลัง task #59 — เดิมแยก 3 สายขนานจาก `Get Latest Readings` เปลี่ยนเป็นสายเดียวเรียงลำดับ): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get RAPT Token` → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings` → `Reload Batches` → `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings` → `Reload Batches 2` → **`Get Latest Readings`** (อ่าน DB หลัง insert เสร็จแล้ว) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Split Message Into Sections`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
+24 nodes (โครงสร้างหลัง task #59 — เดิมแยก 3 สายขนานจาก `Get Latest Readings` เปลี่ยนเป็นสายเดียวเรียงลำดับ): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get RAPT Token` → `Get Pills To Poll` (Postgres, **ทุก Pill ใน `devices` ไม่ผูกกับ batch** — ดู 8.12) → `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings` → `Get Controllers To Poll` (executeOnce) → `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings` → `Get Active Batches` (executeOnce, เฉพาะ `status='active'`) → **`Get Latest Readings`** (อ่าน DB หลัง insert เสร็จแล้ว, กรอง `>= start_date`) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Build Batch Embeds`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
 
 **รวมข้อความ Discord เหลือทางเดียว (เพิ่ม 18 ส.ค.)**: เดิมมี 3 message แยก (`Send Discord Alert` ตอนเฟสเปลี่ยน, `Send Prep Alert` ตอนใกล้เปลี่ยนเฟส, `Send Routine Update` ทุกรอบ) เนื้อหาซ้ำกันเกือบหมดเพราะ `Send Routine Update` เดิมก็มี reasoning + 🔜 prep guidance ครบอยู่แล้ว — ตัด `Send Discord Alert`/`Send Prep Alert` ออก (โหนดที่มันเคยพ่วงไว้คือ `Update Batch Phase`/`Update Prep Alert State` ยังเก็บไว้เหมือนเดิม แค่ต่อตรงจาก IF โหนดแทน) เหลือ `Send Routine Update` ยิงข้อความเดียวต่อรอบ พร้อมเพิ่มตัวบอกเฟสเปลี่ยน (`🔔 (เปลี่ยนจาก X)`) ต่อท้ายชื่อเฟสแทนที่จะแยกข้อความ
 
@@ -579,6 +579,79 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 
 ---
 
+### 8.12 แก้บั๊กร้ายแรง "วิเคราะห์ข้อมูล batch เก่า" + แยกการเก็บข้อมูลออกจากการวิเคราะห์ (task #64, 8 ก.ย.)
+
+**อาการ**: `/ferment_status` ตอบ `cold_crash` ให้ batch ที่เพิ่งเริ่มหมักมา 11 ชั่วโมง (batch 4 Hazy DIPA, `current_phase` ใน DB เป็น `lag`)
+
+**สอบสวนจาก execution 614 จริง** — AI เขียนเหตุผลไว้ตรงๆ ว่า "กราฟยาวจริงคือ 11/08-25/08 (SG 1.0666→1.0084) ผ่าน lag/active/high_krausen/slowing/fg_stable/diacetyl_rest ครบแล้ว" และ "มีช่วงกระโดดผิดปกติ 07/09-08/09 น่าจะเป็นข้อมูล sensor/การเปิดถังใหม่ **ไม่ใช่การหมักจริง**" — คือ AI มองข้อมูลจริงของ batch ปัจจุบันเป็น noise แล้วไปวิเคราะห์ batch เดือนสิงหาแทน ซึ่งเป็นการอ่านที่ตรงกับกราฟที่ส่งไปให้จริงๆ
+
+**สาเหตุ**: `pill_series`/`controller_series` ใน `Get Latest Readings` (Cron) และ `Get Batch For Analysis` (`/ferment_status`) กรองแค่ `device_id` **ไม่ได้กรอง `start_date`** — Pill01 ถูกใช้ซ้ำจาก batch 2 (ส.ค.) มา batch 4 (ก.ย.) โดยไม่ได้ล้างข้อมูล กราฟที่ส่งไปจึงเป็นสองรอบหมักต่อกัน:
+
+| | ส่งไปให้ AI | เป็นของ batch 4 จริง | ของ batch เก่า |
+|---|---|---|---|
+| `pill_readings` | 1,091 | **23** | 1,068 (98%) |
+| `temp_controller_readings` | 1,740 | **40** | 1,700 (98%) |
+
+`control_series` ใน query เดียวกันมี `changed_at >= start_date` อยู่แล้ว และ `Get Simulated Readings` ของ Backtest ก็มีครบทั้ง 3 CTE — แปลว่าตอนเขียนใส่ filter ให้ CTE เดียวแล้วตกอีกสองตัว **cron รอบ 08:00 ตอบ `lag` ถูกโดยบังเอิญ** (log 84 เขียนเองว่า "ข้อมูลก่อน 25/08 คือ batch เก่าที่จบไปแล้ว") ไม่ใช่เพราะไม่มีบั๊ก — ข้อมูลชุดเดียวกันเป๊ะ แค่ตีความออกมาคนละทาง
+
+**บั๊กที่สองที่เจอระหว่างสอบสวน**: `Get Active Batches` (`WHERE status='active'`) เป็นตัวขับทั้งสาย telemetry → **พอ `/ferment_stop` ระบบหยุดเก็บข้อมูลทันที** ช่วง 26/08-07/09 ที่ไม่มี batch active ได้ 0 จุดทั้ง Pill01 และ Pill02 ดู cold crash ต่อหลังปิด batch หรือย้อนดูวันบรรจุไม่ได้เลย
+
+#### แก้: แยก "เก็บข้อมูล" (ตาม device, ต่อเนื่อง) ออกจาก "วิเคราะห์" (ตาม batch, มีขอบเวลา)
+
+```
+เดิม:  Get Active Batches ─┬→ ดึง telemetry → insert     (batch จบ = หยุดทั้งคู่)
+                           └→ วิเคราะห์
+ใหม่:  Get Pills To Poll ──→ ดึง telemetry → insert       (เดินตลอด ไม่สนใจ batch)
+       Get Active Batches ─→ Get Latest Readings          (กรอง >= start_date)
+```
+
+สายใหม่ 24 nodes (ลบ 2 เพิ่ม 2): `Schedule Trigger` → `Get RAPT Token` → **`Get Pills To Poll`** → `Get Pill Telemetry` → `Format Pill Readings` → `Insert Pill Readings` → **`Get Controllers To Poll`** → `Get Controller Telemetry` → `Format Controller Readings` → `Insert Controller Readings` → `Get Active Batches` → `Get Latest Readings` → แยก 2 สายเหมือนเดิม
+
+- **`Get Pills To Poll` / `Get Controllers To Poll`** อ่านจาก `devices` ทั้งตาราง คืน `fetch_from` = reading ล่าสุดของ device ถอยหลัง 3 ชม.เผื่อ overlap พร้อม `paired_controller_name` จาก `raw_data->>'pairedDeviceId'` (เดิมเอาชื่อ controller มาจากแถว batch)
+- **`fetch_from` มีพื้นกันย้อนเกิน 7 วัน** — device ที่เลิกใช้แล้ว (Pill02 แบตหมดตั้งแต่ 25/08) จะค้างที่ reading สุดท้ายตลอดไป ถ้าไม่มีพื้นจะดึงย้อนเป็นเดือนแล้ว insert ทับของเดิม 914 แถวทุก 4 ชม.ตลอดไป — **ยกเว้น device ที่อยู่ใน batch ที่ active** ซึ่งใช้ `start_date` เป็นพื้นแทน กันรูโหว่ถ้าเซ็นเซอร์เงียบไปนานแล้วกลับมา
+- **task #60 หายไปเอง** — `fetch_from` ทำให้ adaptive fetch ทำงานจริงเป็นครั้งแรก เดิม `$json.pill_time_utc` เป็น `undefined` เสมอ (เพราะ `Get Latest Readings` ไม่เคย return field นี้) จึง fallback ไป `start_date` ทุกรอบ ดึงและ re-insert 1,068 จุดเดิมทุก 4 ชม.
+- **ลบ `Reload Batches` / `Reload Batches 2`** — สองตัวนี้มีอยู่เพราะ Postgres INSERT ที่ไม่มี `RETURNING` ทับ `$json` จนอ้าง batch ต่อไม่ได้ ตอนนี้ node ถัดจาก insert เป็น query ใหม่ที่ไม่พึ่ง `$json` แล้ว
+- **`executeOnce: true` บน `Get Controllers To Poll` และ `Get Active Batches`** — ทั้งคู่รับ item ต่อจาก INSERT ที่พ่นออกมาหลักร้อย item ถ้าไม่เปิดจะรัน query ซ้ำหลักร้อยรอบ (บั๊กแบบเดียวกับที่เคยทำให้ `Check Sensor Freshness` ยิง alert ซ้ำ 4 รอบ) และ `alwaysOutputData: true` บน INSERT ทั้งสองตัวกันสายขาดตอน insert ไม่คืน item
+- **ไม่มี batch active = ข้ามเฉพาะส่วนวิเคราะห์** (`Get Active Batches` คืน 0 item) การเก็บข้อมูลด้านบนทำไปเรียบร้อยแล้ว
+
+#### `end_date` — ปิดขอบเวลาของ batch
+
+พอเก็บข้อมูลต่อเนื่องไม่ผูกกับ batch ข้อมูลจะไหลต่อหลัง `/ferment_stop` และ readings เก็บด้วย `device_id` + `time_utc` เท่านั้น (ไม่มี `batch_id` ติดมา) จึงเพิ่มคอลัมน์ `end_date` ลง `batches`, `Stop Batch` เซ็ต `end_date = now()` ตอนปิด, และ backfill batch เก่า
+
+**เกณฑ์ backfill ที่ใช้**: reading สุดท้ายที่ยังไม่เกิน `MAX(phase_log.checked_at)` ของ batch นั้น — cron วิเคราะห์เฉพาะ batch ที่ active ค่านี้จึงเป็นหลักฐานตรงว่า batch เดินอยู่ถึงเมื่อไหร่ (เกณฑ์แรกที่ลองคือ "reading สุดท้ายก่อน batch ถัดไป" ใช้ไม่ได้ — batch 2 ไปกินข้อมูลคืนที่ตั้ง batch 4 ทันที และ batch 3 ที่ `start_date` เท่ากับ batch 4 หาขอบไม่เจอเลย) batch ที่ไม่มี `phase_log` เลย (สร้างแล้วปิดทันที) ใช้ `end_date = start_date`
+
+ผลลัพธ์บน DB จริง: Weizen 10/08→25/08 15:20 (905 จุด), Hazy DIPA #2 12/08→25/08 15:52 (1,048 จุด), batch 3 ช่วงศูนย์ (0 จุด), batch 4 ยัง active
+
+**ยังไม่ผูก `end_date` เข้า query วิเคราะห์** เพราะ cron/`/ferment_status` วิเคราะห์เฉพาะ batch ที่ active ซึ่ง `end_date` เป็น `NULL` เสมอ — เติมขอบบนไปก็ไม่เปลี่ยนพฤติกรรม มีไว้สำหรับย้อนดู/รายงานทีหลัง
+
+**ทดสอบบน VPS จริงทุกขั้น**: query ใหม่ทั้ง 4 ตัวรันจริง (`Get Pills To Poll` คืน Pill01 `fetch_from` 07/09T21:52Z แบบ adaptive และ Pill02 ตกที่พื้น 7 วัน 01/09T03:24Z ตามที่ตั้งใจ), `Get Latest Readings`/`Get Batch For Analysis` หลังแก้คืน **23 จุด pill / 40 จุด controller เริ่มที่ 07/09 23:00** (จาก 1,091/1,740), `Stop Batch` ทดสอบใน transaction แล้ว rollback ยืนยันเซ็ต `end_date` ถูก, และ Node harness ยิง `Format Pill/Controller Readings` ด้วยการ fan-out แบบจริง (หลาย device ในรอบเดียว + device ที่ RAPT คืน `[]`) ยืนยัน `itemMatching` map reading กลับไปหา device ต้นทางถูกทุกแถว
+
+**หมายเหตุ**: `start_date` ของ batch 4 คงไว้ที่ 07/09 23:00 ตามที่ผู้ใช้ยืนยัน — reading 11 จุดช่วง 20:14-22:45 (SG นิ่ง 1.0555-1.0560, อุณหภูมิไต่จาก 15.81 ขึ้น 18.06 คือช่วงปรับอุณหภูมิก่อน pitch) จึงไม่ถูกนับเข้า batch
+
+---
+
+### 8.11 เปลี่ยนข้อความ Discord เป็น embed — แยก batch ให้เห็นชัดตอนหมักหลายตัวพร้อมกัน (task #63, 22 ส.ค.)
+
+**ปัญหา**: ตอนมี 2 batch active พร้อมกัน ผู้ใช้แยกไม่ออกว่าข้อมูลของเบียร์ตัวแรกจบตรงไหน ตัวที่สองเริ่มตรงไหน — สาเหตุคือ `Split Message Into Sections` (เพิ่มไว้แก้บั๊ก content เกิน 2000 ตัวอักษร ดูย่อหน้าก่อนหน้า) หั่นข้อมูลแต่ละ batch ออกเป็น section ละข้อความ (สถานะ / ไทม์ไลน์ / reasoning / prep guidance / คำแนะนำ target) แล้ว `Send Routine Update` ยิงทีละข้อความห่างกัน 1,100ms → **2 batch = ยิงรัวได้ถึง 12 ข้อความติดกัน ~13 วินาที** และมีแค่ข้อความแรกของแต่ละ batch เท่านั้นที่บอกชื่อเบียร์ ท่อนที่เหลือลอยเปล่าๆ ไม่มีบริบท
+
+**แก้โดยเปลี่ยนจาก `content` ธรรมดาไปใช้ Discord embed** ซึ่งแก้ทั้งสองปัญหาพร้อมกัน: embed มีแถบสีซ้าย + title เป็น "ขอบเขต" ของแต่ละ batch ให้เองโดยไม่ต้องประดิษฐ์เส้นคั่น และรับได้ description 4,096 / รวมทุก embed ในข้อความเดียว 6,000 ตัวอักษร เทียบกับ content ที่จำกัด 2,000 — ข้อมูลจริงต่อ batch ~1,500 ตัวอักษรจึงจบใน **1 ข้อความต่อ 1 batch** (2 batch = 2 ข้อความ แทน 12) ผลพลอยได้คือแรงกดดันเรื่อง Discord rate limit 429 (ข้อ 8.7) ลดลง 6 เท่าไปด้วย
+
+**สร้าง embed ที่ `Phase Analysis Engine` ที่เดียว** (`Parse AI Response` เพิ่ม helper `buildDiscordEmbeds()` + `fmtBkkTime()` แล้ว output field ใหม่ `discord_embeds`) แล้วให้ทั้ง `Phase Analysis Cron` และ `/ferment_status` ใช้ตัวเดียวกัน — เหตุผลเดียวกับที่แยก sub-workflow นี้ออกมาแต่แรก คือกันข้อความสองทางค่อยๆ เพี้ยนจากกันเวลาแก้ทีละฝั่ง โค้ดสร้าง embed รับ object ผลลัพธ์ตัวเดียวกับที่ consumer เคยอ่านไปประกอบข้อความเอง (`rowJson` ส่งตัวมันเองเข้า `buildDiscordEmbeds`) จึงไม่มีทางหลุดจากกัน
+
+- **สีแถบสื่อเฟส** — `lag` เทา, `active_ferment` ส้ม, `high_krausen` ส้มเข้ม, `slowing_ferment` เหลือง, `fg_stable` เขียว, `diacetyl_rest` น้ำเงิน, `cold_crash` เขียวน้ำทะเล และ **แดงเมื่อ Pill ค้าง/แบตหมด** (ทับสีเฟส) — เหลือบตาก็รู้ว่า batch ไหนมีปัญหาโดยไม่ต้องอ่าน
+- **โครง embed** — title `📋 <ชื่อเบียร์>`, description = เฟส/gravity/อุณหภูมิ/target/ABV, fields = `⏱️ ไทม์ไลน์การหมัก` / `🧠 เหตุผล` / `🔜 ใกล้เข้าเฟส X` / `🎉 พร้อมบรรจุ/แพ็คได้` / `🌡️ แนะนำตั้ง target ใหม่` (พร้อม ETA), footer = เวลาของข้อมูล Pill/ตู้ควบคุมล่าสุด (เดิม `/ferment_status` แสดงเวลานี้อยู่แล้ว ส่วน cron ไม่มี — ตอนนี้มีทั้งคู่)
+- **Cron**: `Split Message Into Sections` → เปลี่ยนชื่อเป็น **`Build Batch Embeds`** (ชื่อเดิมไม่ตรงหน้าที่แล้ว) เหลือหน้าที่แค่ห่อ `discord_embeds` ส่งต่อพร้อม `batch_id`/`recommended_controller_target_c`/`next_phase` ที่ปุ่มปรับ target ต้องใช้ — `is_last` ถูกตัดทิ้งเพราะ 1 batch = 1 ข้อความแล้ว ปุ่มแนบได้ตรงๆ ไม่ต้องหาข้อความสุดท้าย
+- **`/ferment_status`**: `Build Status Message` ใช้ `discord_embeds` จาก Engine แล้วต่อท้าย title ด้วย `(Pill: <ชื่อ>)` ที่ Engine ไม่รู้จัก (deep copy ก่อนแก้ กันเขียนทับ object ของ node ต้นทาง)
+- **`Send Followup` รองรับทั้งสองแบบ** — node นี้ใช้ร่วมกับ builder อีกหลายตัวที่ยังส่ง `content` ล้วน (`/ferment_start`, `/ferment_stop`, `/ferment_set_temp`, ไม่พบ batch ฯลฯ) body จึงเป็น `$json.embeds ? {content, embeds} : {content}`
+- **fallback เมื่อไม่มี `discord_embeds`** — ทั้ง `Build Batch Embeds` และ `Build Status Message` เก็บทางข้อความล้วนแบบเดิมไว้ เผื่อ import workflow ใหม่แล้วลืม import `Phase Analysis Engine` ตาม (เคยพลาด import ไม่ครบมาแล้ว) หน้าตาไม่สวยแต่ยังได้ข้อมูลครบ ดีกว่า Discord ตีกลับทั้งข้อความเพราะไม่มีทั้ง `content` และ `embeds`
+- **กันเกินลิมิต** — clip field value ที่ 1,024 / description 4,096 / title 256 และแตก embed ตัวใหม่ (`📋 <ชื่อ> (ต่อ)`) เมื่อรวมจะเกิน 6,000 หรือเกิน 25 field สูงสุด 10 embed ต่อข้อความ
+
+**`Phase Analysis Backtest` ไม่แตะ** — `Build Test Summary Message` มีรูปแบบเฉพาะของมัน (เทียบผลแต่ละวันจำลองแบบตาราง) คนละวัตถุประสงค์กับข้อความแจ้งเตือน และอ่าน field เดิมที่ไม่ได้เปลี่ยน จึงไม่กระทบ
+
+**ทดสอบ** Node harness รัน pipeline จริงจากไฟล์ workflow (`Parse AI Response` → `Build Batch Embeds` → expression body ของ `Send Routine Update` → `Build Status Message` → `Send Followup`) ด้วย 2 batch จำลอง (Hazy DIPA ปกติ+เปลี่ยนเฟส / Weizen Pill แบตหมด+พร้อมบรรจุ) และเคสมีปุ่มปรับ target แยกอีกตัว ยืนยัน: ได้ 1 ข้อความต่อ batch, ทุก embed อยู่ในลิมิต Discord, `custom_id` ของปุ่มยังเป็น `settemp|<batch_id>|<target>|<next_phase>` เหมือนเดิม, **embed ที่ cron กับ `/ferment_status` สร้างออกมาเหมือนกันทุกตัวอักษร** (ต่างแค่ `(Pill: ...)` ที่ต่อท้าย title) และรูปแบบตัวเลขคงเดิมครบ (gravity 3 หลัก, อุณหภูมิ/ABV 2 หลัก, ชั่วโมงที่ Pill ค้าง 1 หลัก, วันที่ dd/mm/yyyy) — ทดสอบ fallback ทั้ง 3 ทาง (cron ไม่มี embed / status ไม่มี embed / คำสั่งอื่นที่ส่ง content ล้วน) ยืนยันไม่มีทางไหนส่ง payload ว่างให้ Discord
+
+---
+
 ### 8.9 แก้บั๊ก "AI วิเคราะห์ข้อมูลตามหลัง 1 รอบ cron" (task #59, 19 ส.ค.)
 
 **อาการ**: การวิเคราะห์เฟสใช้ข้อมูลเก่ากว่าความจริงถึง ~4 ชม. (1 รอบ cron เต็ม) ทุกครั้ง — กระทบ gating ของ diacetyl_rest/cold_crash โดยตรง เพราะเกณฑ์พวกนี้ตัดสินจาก "อุณหภูมิ Pill ล่าสุด" แต่ค่าที่ AI เห็นไม่ใช่ค่าล่าสุดจริง
@@ -646,7 +719,9 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 - #59 แก้บั๊ก AI วิเคราะห์ข้อมูลตามหลัง 1 รอบ cron (~4 ชม.) — เปลี่ยน `Phase Analysis Cron` จาก 3 สายขนานเป็นสายเดียวเรียงลำดับ ให้ `Get Latest Readings` อ่าน DB หลัง insert telemetry เสร็จ + เพิ่ม `Reload Batches` กู้ item context หลัง INSERT — ✅ เสร็จ ยืนยันบั๊กจาก execution 461 จริง (Hazy DIPA หายไป 4.0 ชม.พอดี) **เจอบั๊กซ้อนตอน deploy: เผลอเปลี่ยน `Format Pill/Controller Readings` เป็น index ตรงๆ แล้วพัง (HTTP node กระจาย 1,069 items ไม่ใช่ 2) แก้กลับเป็น itemMatching ชี้ต้นทางที่ถูกแล้ว** — **ยืนยันผลจริง execution 468: gap เหลือ 0.00 ชม.ทั้ง 2 batch** (Hazy DIPA จาก 4.0 → 0.00, AI เห็นข้อมูลถึง 13:09 = จุดล่าสุดที่เพิ่ง insert รอบนั้นพอดี) ลำดับ node ถูกต้อง (`Get Latest Readings` ที่ +5.74s หลัง insert ทั้งคู่) — 19 ส.ค.
 - #61 แก้บั๊ก sensor alert ซ้ำ 2 ข้อความ — `Check Sensor Freshness` (Postgres) รัน query 1 ครั้งต่อ 1 input item ทั้งที่ query self-contained ทำให้ได้แถวซ้ำ 2 เท่า แก้ด้วย `executeOnce: true` — ✅ เสร็จ พบจาก execution 468 จริง รอ reimport `Phase Analysis Cron` — 19 ส.ค.
 - #62 Pill ตายกลางคัน: (A) เช็ค/เตือนแบตตอน `/ferment_start` ซึ่งเป็นจังหวะเดียวที่เปลี่ยนแบตได้จริง (ถังยังเปิด) (B) ประมาณอุณหภูมิเบียร์จากตู้ควบคุมด้วย `fallback_gap` ที่คัดเฉพาะช่วงเบียร์นิ่ง+target เดียวกัน และบอก AI ว่าข้อมูลค้าง ห้ามสรุปจากกราฟที่แบนเพราะไม่มีข้อมูลใหม่ — ✅ เสร็จ ทดสอบ SQL จริงบน VPS + harness 3 เคส รอ reimport `Phase Analysis Engine` + `Phase Analysis Cron` + `Phase Analysis Backtest` + `Discord Interactions Webhook` — 19 ส.ค.
-- #60 (ค้าง) telemetry ดึงประวัติทั้ง batch ใหม่ทุกรอบ — `$json.pill_time_utc`/`controller_time_utc` เป็น undefined เสมอเพราะ `Get Latest Readings` ไม่ return field นี้ ทำให้ adaptive fetch ไม่ทำงานจริง fallback ไป `start_date` ตลอด (พบ 1,064 จุด/รอบ) ยังทำงานถูกเพราะ insert idempotent แต่เปลือง API/DB และแย่ลงตามอายุ batch — 🔵 ยังไม่แก้ พบ 19 ส.ค.
+- #63 เปลี่ยนข้อความ Discord เป็น embed (สร้างที่ `Phase Analysis Engine` ที่เดียว ใช้ร่วมกับ `/ferment_status`) — แก้ปัญหาแยกไม่ออกว่าข้อมูล batch ไหนจบตรงไหนตอนหมักหลายตัวพร้อมกัน และยุบจากสูงสุด 12 ข้อความ/รอบ เหลือ 1 ข้อความต่อ batch พร้อมสีแถบสื่อเฟส (แดง = Pill ตาย) — ✅ เสร็จ ทดสอบ harness ทั้ง pipeline + fallback 3 ทาง รอ reimport `Phase Analysis Engine` + `Phase Analysis Cron` + `Discord Interactions Webhook` — 22 ส.ค.
+- #60 (ค้าง) telemetry ดึงประวัติทั้ง batch ใหม่ทุกรอบ — `$json.pill_time_utc`/`controller_time_utc` เป็น undefined เสมอเพราะ `Get Latest Readings` ไม่ return field นี้ ทำให้ adaptive fetch ไม่ทำงานจริง fallback ไป `start_date` ตลอด (พบ 1,064 จุด/รอบ) ยังทำงานถูกเพราะ insert idempotent แต่เปลือง API/DB และแย่ลงตามอายุ batch — ✅ เสร็จ แก้ไปพร้อม #64 (`Get Pills To Poll` คืน `fetch_from` ต่อ device แทน) พบ 19 ส.ค. แก้ 8 ก.ย.
+- #64 แก้บั๊กร้ายแรง: วิเคราะห์ข้อมูล batch เก่าปนกับ batch ปัจจุบัน (`pill_series`/`controller_series` กรองแค่ `device_id` ไม่กรอง `start_date` — Pill ตัวเดียวใช้ซ้ำข้าม batch ได้ ส่งไป 1,091 จุดทั้งที่เป็นของ batch ปัจจุบันแค่ 23 จุด ทำให้ `/ferment_status` ตอบ `cold_crash` ให้ batch ที่หมักมา 11 ชม.) + แยกการเก็บ telemetry ออกจาก batch ให้เก็บต่อเนื่องแม้หมักจบ (เดิม `/ferment_stop` แล้วหยุดเก็บทันที ช่วง 26/08-07/09 ได้ 0 จุด) + เพิ่ม `end_date` ปิดขอบ batch พร้อม backfill — ✅ เสร็จ ทดสอบ query จริงบน VPS ทุกตัว + harness fan-out รอ reimport `Phase Analysis Cron` + `Discord Interactions Webhook` — 8 ก.ย.
 
 ---
 

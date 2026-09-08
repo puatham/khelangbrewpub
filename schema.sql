@@ -58,6 +58,10 @@ CREATE TABLE batches (
   pill_device_id UUID REFERENCES devices(device_id),
   temp_controller_device_id UUID REFERENCES devices(device_id),
   start_date TIMESTAMPTZ NOT NULL,
+  -- ปิดขอบเวลาของ batch ตอน /ferment_stop (NULL = ยังหมักอยู่) จำเป็นเพราะ Pill/ตู้ถูก
+  -- ใช้ซ้ำข้าม batch ได้ และตั้งแต่เปลี่ยนไป poll telemetry ต่อเนื่องไม่ผูกกับ batch
+  -- ข้อมูลก็ยังไหลเข้ามาหลังหมักจบ — ไม่มีคอลัมน์นี้จะแยกไม่ออกว่า reading ไหนของ batch ไหน
+  end_date TIMESTAMPTZ,
   target_fg NUMERIC,
   beer_name TEXT,
   current_phase TEXT DEFAULT 'lag',

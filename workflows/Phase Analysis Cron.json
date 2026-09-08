@@ -83,7 +83,8 @@
           "id": "t6ZZv3ZEHRRZX5Q2",
           "name": "Postgres account"
         }
-      }
+      },
+      "executeOnce": true
     },
     {
       "parameters": {
@@ -97,7 +98,7 @@
             },
             {
               "name": "startDate",
-              "value": "={{ $json.pill_time_utc ? DateTime.fromISO($json.pill_time_utc).minus({hours:3}).toUTC().toISO() : DateTime.fromISO($json.start_date).toUTC().toISO() }}"
+              "value": "={{ DateTime.fromISO($json.fetch_from).toUTC().toISO() }}"
             },
             {
               "name": "endDate",
@@ -137,7 +138,7 @@
             },
             {
               "name": "startDate",
-              "value": "={{ $json.controller_time_utc ? DateTime.fromISO($json.controller_time_utc).minus({hours:3}).toUTC().toISO() : DateTime.fromISO($json.start_date).toUTC().toISO() }}"
+              "value": "={{ DateTime.fromISO($json.fetch_from).toUTC().toISO() }}"
             },
             {
               "name": "endDate",
@@ -167,7 +168,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 batch) idx จึงเกิน\n  // จำนวน batch เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา batch ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const batch = $('Get Active Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: batch.controller_name\n      }\n    });\n  }\n});\nreturn rows;"
+        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 device) idx จึงเกิน\n  // จำนวน device เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา device ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const src = $('Get Pills To Poll').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: src.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: src.paired_controller_name\n      }\n    });\n  }\n});\nreturn rows;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -180,7 +181,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 batch) idx จึงเกิน\n  // จำนวน batch เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา batch ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const batch = $('Reload Batches').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: batch.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
+        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 device) idx จึงเกิน\n  // จำนวน device เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา device ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const src = $('Get Controllers To Poll').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: src.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -212,7 +213,8 @@
           "id": "t6ZZv3ZEHRRZX5Q2",
           "name": "Postgres account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -235,12 +237,13 @@
           "id": "t6ZZv3ZEHRRZX5Q2",
           "name": "Postgres account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH pill_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'sg', gravity_sg, 'temp', temperature_c) ORDER BY time_utc ASC) AS series\n  FROM pill_readings WHERE device_id = $1\n),\ncontroller_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series\n  FROM temp_controller_readings WHERE device_id = $2\n),\ncontrol_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', changed_at, 'old', old_value, 'new', new_value, 'by', changed_by, 'remark', remark) ORDER BY changed_at ASC) AS series\n  FROM control_log\n  WHERE device_id = $2 AND action = 'set_target_temperature' AND changed_at >= $3\n),\nrecipe_info AS (\n  SELECT r.name AS recipe_name, r.style_name, r.og AS recipe_og, r.fg AS recipe_fg,\n         r.fermentation_temp_c AS recipe_fermentation_temp_c,\n         r.raw_data->'fermentation'->'steps' AS fermentation_steps,\n         (SELECT jsonb_agg(jsonb_build_object('day', dh->>'time', 'name', dh->>'name', 'amount_g', dh->>'amount') ORDER BY (dh->>'time')::numeric)\n            FROM jsonb_array_elements(COALESCE(r.raw_data->'hops', '[]'::jsonb)) dh\n            WHERE dh->>'use' ILIKE '%dry%') AS dry_hop_plan,\n         y.name AS yeast_name, y.min_temp_c AS yeast_min_temp_c, y.max_temp_c AS yeast_max_temp_c,\n         y.attenuation AS yeast_attenuation, y.min_attenuation AS yeast_min_attenuation, y.max_attenuation AS yeast_max_attenuation\n  FROM recipes r\n  LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(r.yeast_name))\n  WHERE r.recipe_id = NULLIF($9, 'null')\n),\nstale_calc AS (\n  -- อายุของ Pill reading ล่าสุด — ใช้ตัดสินว่าเซ็นเซอร์ตาย/เงียบอยู่หรือไม่\n  SELECT EXTRACT(EPOCH FROM (now() - MAX(time_utc)))/3600 AS pill_stale_hours,\n         MAX(time_utc) AS pill_last_at\n  FROM pill_readings WHERE device_id = $1\n),\nlast_battery AS (\n  SELECT battery_percent FROM pill_readings\n  WHERE device_id = $1 AND battery_percent IS NOT NULL\n  ORDER BY time_utc DESC LIMIT 1\n),\nfallback_gap AS (\n  -- gap สำรองสำหรับ \"ประมาณอุณหภูมิเบียร์จากตู้ควบคุม\" เมื่อ Pill ตายกลางคัน — ต่างจาก gap_calc\n  -- ที่ผูกกับ 12 ชม.ล่าสุด (ว่างทันทีที่ Pill เงียบ) โดยเลือกเฉพาะจุดที่เชื่อได้จริง 2 เงื่อนไข:\n  --   (1) เบียร์นิ่งแล้ว — เปลี่ยนจากจุดก่อนหน้า < 0.15°C (ข้อมูลจริงชี้ว่าช่วงกำลังไล่อุณหภูมิ\n  --       gap แกว่ง +2.9 ถึง -1.5 เชื่อไม่ได้เลย เพราะเบียร์มีมวลความร้อนตามตู้ไม่ทัน)\n  --   (2) ตู้ตั้ง target เดียวกับตอนนี้ — gap แปรตามระดับอุณหภูมิ (ช่วงหมักคายความร้อน gap กว้าง,\n  --       ช่วง cold crash แคบหรือติดลบ) ใช้ข้ามระดับไม่ได้\n  -- ถ้าได้ไม่ถึง 3 จุดถือว่าประมาณไม่ได้ (เช่นเซ็นเซอร์ตายตอนกำลังไล่อุณหภูมิ ยังไม่ทันนิ่ง)\n  SELECT AVG(gap) AS gap, COUNT(*) AS n_points, STDDEV(gap) AS gap_sd\n  FROM (\n    SELECT p.temperature_c - c.temp AS gap,\n           p.temperature_c - LAG(p.temperature_c) OVER (ORDER BY p.time_utc) AS d,\n           c.target\n    FROM pill_readings p\n    JOIN LATERAL (\n      SELECT temperature_c AS temp, target_temperature_c AS target\n      FROM temp_controller_readings x\n      WHERE x.device_id = $2\n      ORDER BY abs(EXTRACT(EPOCH FROM (x.time_utc - p.time_utc))) LIMIT 1\n    ) c ON true\n    WHERE p.device_id = $1\n      AND p.time_utc >= (SELECT MAX(time_utc) FROM pill_readings WHERE device_id = $1) - INTERVAL '48 hours'\n  ) t\n  WHERE abs(d) < 0.15\n    AND round(target::numeric, 1) = round((\n      SELECT target_temperature_c FROM temp_controller_readings\n      WHERE device_id = $2 ORDER BY time_utc DESC LIMIT 1\n    )::numeric, 1)\n),\nlast_change AS (\n  SELECT COALESCE(MAX(changed_at), $3::timestamptz) AS t\n  FROM control_log WHERE device_id = $2 AND action = 'set_target_temperature'\n),\ngap_window AS (\n  -- ตัดช่วง transient หลังปรับ target ใหม่ๆ ออก (2 ชม.แรก) และไม่ย้อนไกลเกิน 12 ชม.\n  -- (สภาพห้อง/ตู้อาจเปลี่ยนไปแล้ว) เพื่อเอาแค่ช่วงที่ระบบนิ่งจริงๆ มาเฉลี่ยส่วนต่าง\n  SELECT GREATEST((SELECT t FROM last_change) + INTERVAL '2 hours', now() - INTERVAL '12 hours') AS t\n),\ngap_calc AS (\n  SELECT AVG(p.temperature_c - c.temperature_c) AS avg_gap, COUNT(*) AS n_points\n  FROM pill_readings p\n  JOIN temp_controller_readings c\n    ON c.device_id = $2\n    AND c.time_utc BETWEEN p.time_utc - INTERVAL '10 minutes' AND p.time_utc + INTERVAL '10 minutes'\n  WHERE p.device_id = $1\n    AND p.time_utc >= (SELECT t FROM gap_window)\n)\nSELECT\n  $4::int AS batch_id,\n  $5::text AS beer_name,\n  $6::text AS current_phase,\n  $7::text AS prep_alerted_for_phase,\n  $8::text AS controller_name,\n  $1::uuid AS pill_id,\n  $2::uuid AS controller_id,\n  $3::timestamptz AS start_date,\n  NULLIF($9, 'null') AS recipe_id,\n  COALESCE(ps.series, '[]'::jsonb) AS pill_series,\n  COALESCE(cs.series, '[]'::jsonb) AS controller_series,\n  COALESCE(ctl.series, '[]'::jsonb) AS control_series,\n  ri.recipe_name, ri.style_name, ri.recipe_og, ri.recipe_fg, ri.recipe_fermentation_temp_c,\n  COALESCE(ri.fermentation_steps, '[]'::jsonb) AS fermentation_steps,\n  COALESCE(ri.dry_hop_plan, '[]'::jsonb) AS dry_hop_plan,\n  ri.yeast_name, ri.yeast_min_temp_c, ri.yeast_max_temp_c, ri.yeast_attenuation, ri.yeast_min_attenuation, ri.yeast_max_attenuation,\n  sc.pill_stale_hours, sc.pill_last_at,\n  lb.battery_percent AS pill_battery_percent,\n  fg.gap AS fallback_gap_c, fg.n_points AS fallback_gap_points, fg.gap_sd AS fallback_gap_sd,\n  gc.avg_gap AS stable_gap_c, gc.n_points AS stable_gap_points\nFROM (SELECT 1) AS anchor\nLEFT JOIN pill_series ps ON true\nLEFT JOIN controller_series cs ON true\nLEFT JOIN control_series ctl ON true\nLEFT JOIN recipe_info ri ON true\nLEFT JOIN stale_calc sc ON true\nLEFT JOIN last_battery lb ON true\nLEFT JOIN fallback_gap fg ON true\nLEFT JOIN gap_calc gc ON true;",
+        "query": "WITH pill_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'sg', gravity_sg, 'temp', temperature_c) ORDER BY time_utc ASC) AS series\n  -- ต้องกรอง start_date ด้วย ไม่ใช่แค่ device_id — Pill ตัวเดียวถูกใช้ซ้ำหลาย batch ได้\n  -- ถ้าไม่กรองจะส่งกราฟของ batch ก่อนหน้าไปให้ AI ด้วย (เจอจริง 08/09: batch 4 มี reading\n  -- ของตัวเอง 23 จุด แต่ส่งไป 1,091 จุด — 98% เป็น batch เดือน ส.ค.ที่จบด้วย cold_crash\n  -- ทำให้ /ferment_status ตอบ cold_crash ทั้งที่เพิ่งหมักมา 11 ชม.)\n  FROM pill_readings WHERE device_id = $1 AND time_utc >= $3::timestamptz\n),\ncontroller_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series\n  FROM temp_controller_readings WHERE device_id = $2 AND time_utc >= $3::timestamptz\n),\ncontrol_series AS (\n  SELECT jsonb_agg(jsonb_build_object('t', changed_at, 'old', old_value, 'new', new_value, 'by', changed_by, 'remark', remark) ORDER BY changed_at ASC) AS series\n  FROM control_log\n  WHERE device_id = $2 AND action = 'set_target_temperature' AND changed_at >= $3\n),\nrecipe_info AS (\n  SELECT r.name AS recipe_name, r.style_name, r.og AS recipe_og, r.fg AS recipe_fg,\n         r.fermentation_temp_c AS recipe_fermentation_temp_c,\n         r.raw_data->'fermentation'->'steps' AS fermentation_steps,\n         (SELECT jsonb_agg(jsonb_build_object('day', dh->>'time', 'name', dh->>'name', 'amount_g', dh->>'amount') ORDER BY (dh->>'time')::numeric)\n            FROM jsonb_array_elements(COALESCE(r.raw_data->'hops', '[]'::jsonb)) dh\n            WHERE dh->>'use' ILIKE '%dry%') AS dry_hop_plan,\n         y.name AS yeast_name, y.min_temp_c AS yeast_min_temp_c, y.max_temp_c AS yeast_max_temp_c,\n         y.attenuation AS yeast_attenuation, y.min_attenuation AS yeast_min_attenuation, y.max_attenuation AS yeast_max_attenuation\n  FROM recipes r\n  LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(r.yeast_name))\n  WHERE r.recipe_id = NULLIF($9, 'null')\n),\nstale_calc AS (\n  -- อายุของ Pill reading ล่าสุด — ใช้ตัดสินว่าเซ็นเซอร์ตาย/เงียบอยู่หรือไม่\n  SELECT EXTRACT(EPOCH FROM (now() - MAX(time_utc)))/3600 AS pill_stale_hours,\n         MAX(time_utc) AS pill_last_at\n  FROM pill_readings WHERE device_id = $1\n),\nlast_battery AS (\n  SELECT battery_percent FROM pill_readings\n  WHERE device_id = $1 AND battery_percent IS NOT NULL\n  ORDER BY time_utc DESC LIMIT 1\n),\nfallback_gap AS (\n  -- gap สำรองสำหรับ \"ประมาณอุณหภูมิเบียร์จากตู้ควบคุม\" เมื่อ Pill ตายกลางคัน — ต่างจาก gap_calc\n  -- ที่ผูกกับ 12 ชม.ล่าสุด (ว่างทันทีที่ Pill เงียบ) โดยเลือกเฉพาะจุดที่เชื่อได้จริง 2 เงื่อนไข:\n  --   (1) เบียร์นิ่งแล้ว — เปลี่ยนจากจุดก่อนหน้า < 0.15°C (ข้อมูลจริงชี้ว่าช่วงกำลังไล่อุณหภูมิ\n  --       gap แกว่ง +2.9 ถึง -1.5 เชื่อไม่ได้เลย เพราะเบียร์มีมวลความร้อนตามตู้ไม่ทัน)\n  --   (2) ตู้ตั้ง target เดียวกับตอนนี้ — gap แปรตามระดับอุณหภูมิ (ช่วงหมักคายความร้อน gap กว้าง,\n  --       ช่วง cold crash แคบหรือติดลบ) ใช้ข้ามระดับไม่ได้\n  -- ถ้าได้ไม่ถึง 3 จุดถือว่าประมาณไม่ได้ (เช่นเซ็นเซอร์ตายตอนกำลังไล่อุณหภูมิ ยังไม่ทันนิ่ง)\n  SELECT AVG(gap) AS gap, COUNT(*) AS n_points, STDDEV(gap) AS gap_sd\n  FROM (\n    SELECT p.temperature_c - c.temp AS gap,\n           p.temperature_c - LAG(p.temperature_c) OVER (ORDER BY p.time_utc) AS d,\n           c.target\n    FROM pill_readings p\n    JOIN LATERAL (\n      SELECT temperature_c AS temp, target_temperature_c AS target\n      FROM temp_controller_readings x\n      WHERE x.device_id = $2\n      ORDER BY abs(EXTRACT(EPOCH FROM (x.time_utc - p.time_utc))) LIMIT 1\n    ) c ON true\n    WHERE p.device_id = $1\n      AND p.time_utc >= $3::timestamptz\n      AND p.time_utc >= (SELECT MAX(time_utc) FROM pill_readings WHERE device_id = $1) - INTERVAL '48 hours'\n  ) t\n  WHERE abs(d) < 0.15\n    AND round(target::numeric, 1) = round((\n      SELECT target_temperature_c FROM temp_controller_readings\n      WHERE device_id = $2 ORDER BY time_utc DESC LIMIT 1\n    )::numeric, 1)\n),\nlast_change AS (\n  SELECT COALESCE(MAX(changed_at), $3::timestamptz) AS t\n  FROM control_log WHERE device_id = $2 AND action = 'set_target_temperature'\n),\ngap_window AS (\n  -- ตัดช่วง transient หลังปรับ target ใหม่ๆ ออก (2 ชม.แรก) และไม่ย้อนไกลเกิน 12 ชม.\n  -- (สภาพห้อง/ตู้อาจเปลี่ยนไปแล้ว) เพื่อเอาแค่ช่วงที่ระบบนิ่งจริงๆ มาเฉลี่ยส่วนต่าง\n  SELECT GREATEST((SELECT t FROM last_change) + INTERVAL '2 hours', now() - INTERVAL '12 hours') AS t\n),\ngap_calc AS (\n  SELECT AVG(p.temperature_c - c.temperature_c) AS avg_gap, COUNT(*) AS n_points\n  FROM pill_readings p\n  JOIN temp_controller_readings c\n    ON c.device_id = $2\n    AND c.time_utc BETWEEN p.time_utc - INTERVAL '10 minutes' AND p.time_utc + INTERVAL '10 minutes'\n  WHERE p.device_id = $1\n    AND p.time_utc >= (SELECT t FROM gap_window)\n)\nSELECT\n  $4::int AS batch_id,\n  $5::text AS beer_name,\n  $6::text AS current_phase,\n  $7::text AS prep_alerted_for_phase,\n  $8::text AS controller_name,\n  $1::uuid AS pill_id,\n  $2::uuid AS controller_id,\n  $3::timestamptz AS start_date,\n  NULLIF($9, 'null') AS recipe_id,\n  COALESCE(ps.series, '[]'::jsonb) AS pill_series,\n  COALESCE(cs.series, '[]'::jsonb) AS controller_series,\n  COALESCE(ctl.series, '[]'::jsonb) AS control_series,\n  ri.recipe_name, ri.style_name, ri.recipe_og, ri.recipe_fg, ri.recipe_fermentation_temp_c,\n  COALESCE(ri.fermentation_steps, '[]'::jsonb) AS fermentation_steps,\n  COALESCE(ri.dry_hop_plan, '[]'::jsonb) AS dry_hop_plan,\n  ri.yeast_name, ri.yeast_min_temp_c, ri.yeast_max_temp_c, ri.yeast_attenuation, ri.yeast_min_attenuation, ri.yeast_max_attenuation,\n  sc.pill_stale_hours, sc.pill_last_at,\n  lb.battery_percent AS pill_battery_percent,\n  fg.gap AS fallback_gap_c, fg.n_points AS fallback_gap_points, fg.gap_sd AS fallback_gap_sd,\n  gc.avg_gap AS stable_gap_c, gc.n_points AS stable_gap_points\nFROM (SELECT 1) AS anchor\nLEFT JOIN pill_series ps ON true\nLEFT JOIN controller_series cs ON true\nLEFT JOIN control_series ctl ON true\nLEFT JOIN recipe_info ri ON true\nLEFT JOIN stale_calc sc ON true\nLEFT JOIN last_battery lb ON true\nLEFT JOIN fallback_gap fg ON true\nLEFT JOIN gap_calc gc ON true;",
         "options": {
           "queryReplacement": "={{$json.pill_id}}, {{$json.controller_id}}, {{$json.start_date}}, {{$json.batch_id}}, {{$json.beer_name}}, {{$json.current_phase}}, {{$json.prep_alerted_for_phase}}, {{$json.controller_name}}, {{$json.recipe_id}}"
         }
@@ -405,7 +408,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ content: $json.content, components: ($json.is_last && $json.recommended_controller_target_c != null) ? [{ type: 1, components: [{ type: 2, style: 1, label: '🌡️ ปรับ target → ' + $json.recommended_controller_target_c.toFixed(2) + '°C', custom_id: 'settemp|' + $json.batch_id + '|' + $json.recommended_controller_target_c.toFixed(2) + '|' + ($json.next_phase || 'transition') }] }] : undefined }) }}",
+        "body": "={{ JSON.stringify({ content: $json.content || '', embeds: $json.embeds, components: ($json.recommended_controller_target_c != null) ? [{ type: 1, components: [{ type: 2, style: 1, label: '🌡️ ปรับ target → ' + $json.recommended_controller_target_c.toFixed(2) + '°C', custom_id: 'settemp|' + $json.batch_id + '|' + $json.recommended_controller_target_c.toFixed(2) + '|' + ($json.next_phase || 'transition') }] }] : undefined }) }}",
         "options": {
           "batching": {
             "batch": {
@@ -435,7 +438,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst results = [];\n\n// toFixed เพื่อให้เลขทศนิยมแสดงจำนวนหลักคงที่เสมอ (เช่น 20.00 ไม่ใช่ 20)\n// ต่างจาก round() ใน Parse AI Response ที่ปัดค่าไว้ใช้ต่อ/insert DB เท่านั้น\nfunction fmt(v, n) {\n  return v == null ? '-' : Number(v).toFixed(n);\n}\n\n// loop ทุก item (1 item = 1 batch active) — เดิมใช้ $input.first() ตัวเดียว\n// ทำให้ตอนมีมากกว่า 1 batch active พร้อมกัน ยิงข้อความให้แค่ batch แรกเท่านั้น\n// batch อื่นหายไปเงียบๆ (เจอจริงตอนมี 2 batch active พร้อมกัน)\nitems.forEach((it) => {\n  const d = it.json;\n  const sections = [];\n\n  const header = '📋 อัปเดตสถานะ: ' + d.beer_name\n    + '\\nเฟส: ' + d.detected_phase\n    + (d.detected_phase !== d.previous_phase ? (' 🔔 (เปลี่ยนจาก ' + d.previous_phase + ')') : '')\n    + (d.next_phase ? (' ใกล้ ' + d.next_phase) : '')\n    + (d.pill_is_stale\n        ? ('\\n⚠️ Pill เงียบมา ' + fmt(d.pill_stale_hours, 1) + ' ชม.'\n           + (d.pill_battery_percent != null && Number(d.pill_battery_percent) <= 5 ? ' (แบตหมด)' : '')\n           + ' — ค่าด้านล่างเป็นข้อมูลค้าง'\n           + '\\ngravity: ' + fmt(d.gravity_sg, 3) + ' SG (ค้าง ไม่อัปเดตแล้ว)'\n           + (d.estimated_beer_temp_c != null\n               ? ('\\nอุณหภูมิเบียร์: ≈' + fmt(d.estimated_beer_temp_c, 2) + '°C (ประมาณจากตู้ควบคุม)')\n               : ('\\nอุณหภูมิเบียร์: ประมาณไม่ได้ (Pill ค้างที่ ' + fmt(d.temperature_c, 2) + '°C)')))\n        : ('\\ngravity: ' + fmt(d.gravity_sg, 3) + ' SG, Pill: ' + fmt(d.temperature_c, 2) + '°C'))\n    + '\\nตู้ควบคุม: ' + fmt(d.controller_temp_c, 2) + '°C (target ' + fmt(d.target_temperature_c, 2) + '°C)'\n    + '\\nABV: ~' + fmt(d.abv_percent, 2) + '%';\n  sections.push(header);\n\n  if (d.phase_timeline_text) {\n    sections.push('⏱️ ไทม์ไลน์การหมัก:\\n' + d.phase_timeline_text);\n  }\n\n  sections.push(d.reasoning);\n\n  if (d.next_phase) {\n    sections.push('🔜 ใกล้เข้าเฟส ' + d.next_phase + ':\\n' + d.prep_actions_text);\n  }\n\n  if (d.batch_ready_to_package) {\n    sections.push('🎉 cold crash ครบช่วงแล้ว — พร้อมบรรจุ/แพ็คได้ เก็บเบียร์เสร็จแล้วสั่ง /ferment_stop เพื่อปิด batch');\n  }\n\n  if (d.recommended_controller_target_c != null) {\n    let recSection = '🌡️ แนะนำตั้ง target ใหม่ ' + fmt(d.recommended_controller_target_c, 2) + '°C (ให้ Pill ถึง ' + fmt(d.recommended_pill_temp_c, 2) + '°C ตามแผน)';\n    if (d.pill_eta_text) {\n      recSection += '\\n⏱️ ' + d.pill_eta_text;\n    }\n    sections.push(recSection);\n  }\n\n  const LIMIT = 1900;\n  const chunks = [];\n  for (const section of sections) {\n    if (section.length <= LIMIT) {\n      chunks.push(section);\n    } else {\n      for (let i = 0; i < section.length; i += LIMIT) {\n        chunks.push(section.slice(i, i + LIMIT));\n      }\n    }\n  }\n\n  chunks.forEach((content, i) => {\n    results.push({\n      json: {\n        content,\n        is_last: i === chunks.length - 1,\n        batch_id: d.batch_id,\n        recommended_controller_target_c: d.recommended_controller_target_c,\n        recommended_pill_temp_c: d.recommended_pill_temp_c,\n        next_phase: d.next_phase\n      }\n    });\n  });\n});\n\nreturn results;\n"
+        "jsCode": "// 1 item = 1 batch = 1 ข้อความ Discord — เดิม node นี้หั่นข้อความเป็น section ละ\n// ข้อความ (header/ไทม์ไลน์/เหตุผล/เตรียมตัว/แนะนำ) เพราะ content ธรรมดาจำกัด 2000\n// ตัวอักษร ทำให้ตอนมี 2 batch active ยิงรัวติดกันได้ถึง 12 ข้อความ และมีแค่ข้อความแรก\n// ของแต่ละ batch ที่บอกชื่อเบียร์ ท่อนที่เหลือลอยเปล่าๆ แยกไม่ออกว่าของตัวไหน\n// ตอนนี้ใช้ embed (รวมได้ 6000 ตัวอักษร + มีแถบสี/title เป็นขอบเขตให้เอง) จึงจบใน\n// ข้อความเดียวต่อ batch — embed ถูกสร้างที่ Phase Analysis Engine เพื่อให้หน้าตา\n// ตรงกับ /ferment_status เป๊ะ ที่นี่แค่ห่อส่งต่อพร้อมข้อมูลที่ปุ่ม \"ปรับ target\" ต้องใช้\nconst results = [];\n$input.all().forEach((it) => {\n  const d = it.json;\n  const out = {\n    batch_id: d.batch_id,\n    recommended_controller_target_c: d.recommended_controller_target_c,\n    recommended_pill_temp_c: d.recommended_pill_temp_c,\n    next_phase: d.next_phase\n  };\n  if (Array.isArray(d.discord_embeds) && d.discord_embeds.length) {\n    out.embeds = d.discord_embeds;\n  } else {\n    // fallback ข้อความล้วน เผื่อ import workflow นี้ใหม่แล้วลืม import Phase Analysis\n    // Engine ตาม (เคยพลาด import ไม่ครบมาแล้ว) — หน้าตาไม่สวยแต่ยังได้ข้อมูลครบ\n    // ดีกว่า Discord ตีกลับทั้งข้อความเพราะไม่มีทั้ง content และ embeds\n    out.content = '📋 อัปเดตสถานะ: ' + (d.beer_name || '(ไม่ระบุชื่อ)')\n      + '\\nเฟส: ' + (d.detected_phase || '-')\n      + (d.reasoning ? ('\\n' + d.reasoning) : '');\n  }\n  results.push({ json: out });\n});\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -444,7 +447,7 @@
         620
       ],
       "id": "b2e3f6a1-7c1d-4e2a-9f0b-3a5d8c6e1f42",
-      "name": "Split Message Into Sections"
+      "name": "Build Batch Embeds"
     },
     {
       "parameters": {
@@ -554,29 +557,47 @@
     },
     {
       "parameters": {
-        "jsCode": "// กู้ item context ของ batch กลับมาหลัง Postgres INSERT — INSERT ที่ไม่มี RETURNING จะ\n// ทับ $json ด้วยผลลัพธ์เปล่าและทำให้ pairedItem หลุด (บั๊กที่เคยเจอในข้อ 8.3) อ่านจาก\n// $('Get Active Batches').all() ตรงๆ ปลอดภัยเพราะอ้างอิง node ด้วยชื่อ ไม่พึ่ง pairedItem\n// และได้ item ครบทุก batch เรียงลำดับเดิมเสมอ\nreturn $('Get Active Batches').all().map(it => ({ json: it.json }));"
+        "operation": "executeQuery",
+        "query": "-- ดึงรายชื่อ Pill ทุกตัวเพื่อ poll telemetry ต่อเนื่อง **ไม่ผูกกับ batch** — ระบบจึงเก็บ\n-- ข้อมูลต่อแม้หมักจบแล้ว (ดู cold crash ต่อ/วันบรรจุได้) เดิม Get Active Batches เป็นตัวขับ\n-- ทั้งสาย พอ /ferment_stop ปุ๊บก็หยุดเก็บทันที — เจอจริง 08/09: ช่วง 26/08-07/09 ที่ไม่มี\n-- batch active ได้ 0 จุดทั้ง Pill01 และ Pill02\n-- พื้นของ fetch_from: device ที่เลิกใช้แล้ว (เช่น Pill02 แบตหมดตั้งแต่ 25/08) จะค้างอยู่ที่\n-- reading สุดท้ายตลอดไป ถ้าไม่มีพื้นจะดึงย้อนหลังเป็นเดือนทุกรอบ แล้ว insert ทับของเดิม\n-- หลักร้อยแถวทุก 4 ชม.โดยไม่ได้อะไรเลย — จึงกันไม่ให้ย้อนเกิน 7 วัน **ยกเว้น** device ที่\n-- กำลังอยู่ใน batch ที่ active ซึ่งใช้ start_date ของ batch เป็นพื้นแทน เพื่อไม่ให้เกิดรูโหว่\n-- ถ้าเซ็นเซอร์เงียบไปนานแล้วกลับมาส่งข้อมูลย้อนหลัง\n-- fetch_from = reading ล่าสุดของ device ถอยหลัง 3 ชม.เผื่อ overlap (INSERT เป็น ON CONFLICT\n-- DO NOTHING กันซ้ำอยู่แล้ว) ถ้ายังไม่เคยมี reading เลยถอยไป 7 วัน — ค่านี้ทำให้ adaptive\n-- fetch ทำงานจริงเป็นครั้งแรก (เดิม $json.pill_time_utc เป็น undefined เสมอเพราะ Get Latest\n-- Readings ไม่เคย return field นี้ จึง fallback ไป start_date ทุกรอบ ดึงซ้ำ 1,068 จุด/รอบ)\nSELECT d.device_id AS pill_id,\n       d.device_name AS pill_name,\n       to_char(GREATEST(\n                 COALESCE(MAX(p.time_utc) - INTERVAL '3 hours', now() - INTERVAL '7 days'),\n                 COALESCE(MIN(ab.start_date), now() - INTERVAL '7 days'))\n               AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS fetch_from,\n       (SELECT x.device_name FROM devices x\n         WHERE x.device_id::text = d.raw_data->>'pairedDeviceId') AS paired_controller_name\nFROM devices d\nLEFT JOIN pill_readings p ON p.device_id = d.device_id\nLEFT JOIN batches ab ON ab.pill_device_id = d.device_id AND ab.status = 'active'\nWHERE d.device_type = 'pill'\nGROUP BY d.device_id, d.device_name, d.raw_data\nORDER BY d.device_name;",
+        "options": {}
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
       "position": [
-        1100,
-        400
+        18096,
+        6592
       ],
-      "id": "a9b8c7d6-0000-4000-8000-000000000021",
-      "name": "Reload Batches"
+      "id": "b1a2c3d4-0000-4000-8000-000000000101",
+      "name": "Get Pills To Poll",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "// กู้ item context ของ batch กลับมาหลัง Postgres INSERT — INSERT ที่ไม่มี RETURNING จะ\n// ทับ $json ด้วยผลลัพธ์เปล่าและทำให้ pairedItem หลุด (บั๊กที่เคยเจอในข้อ 8.3) อ่านจาก\n// $('Get Active Batches').all() ตรงๆ ปลอดภัยเพราะอ้างอิง node ด้วยชื่อ ไม่พึ่ง pairedItem\n// และได้ item ครบทุก batch เรียงลำดับเดิมเสมอ\nreturn $('Get Active Batches').all().map(it => ({ json: it.json }));"
+        "operation": "executeQuery",
+        "query": "-- คู่กับ Get Pills To Poll — poll ตู้ควบคุมทุกตัวต่อเนื่องไม่ผูกกับ batch เช่นกัน\n-- ต้องเปิด \"Execute Once\" เพราะ node นี้รับ item ต่อจาก Insert Pill Readings ซึ่งพ่นออกมา\n-- หลักร้อย item (1 ต่อ 1 reading ที่ insert) ถ้าไม่เปิดจะรัน query ซ้ำหลักร้อยรอบ\n-- พื้นของ fetch_from: device ที่เลิกใช้แล้ว (เช่น Pill02 แบตหมดตั้งแต่ 25/08) จะค้างอยู่ที่\n-- reading สุดท้ายตลอดไป ถ้าไม่มีพื้นจะดึงย้อนหลังเป็นเดือนทุกรอบ แล้ว insert ทับของเดิม\n-- หลักร้อยแถวทุก 4 ชม.โดยไม่ได้อะไรเลย — จึงกันไม่ให้ย้อนเกิน 7 วัน **ยกเว้น** device ที่\n-- กำลังอยู่ใน batch ที่ active ซึ่งใช้ start_date ของ batch เป็นพื้นแทน เพื่อไม่ให้เกิดรูโหว่\n-- ถ้าเซ็นเซอร์เงียบไปนานแล้วกลับมาส่งข้อมูลย้อนหลัง\n-- (บั๊กแบบเดียวกับที่เคยทำให้ Check Sensor Freshness ยิง alert ซ้ำ 4 รอบ)\nSELECT d.device_id AS controller_id,\n       d.device_name AS controller_name,\n       to_char(GREATEST(\n                 COALESCE(MAX(c.time_utc) - INTERVAL '3 hours', now() - INTERVAL '7 days'),\n                 COALESCE(MIN(ab.start_date), now() - INTERVAL '7 days'))\n               AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS fetch_from\nFROM devices d\nLEFT JOIN temp_controller_readings c ON c.device_id = d.device_id\nLEFT JOIN batches ab ON ab.temp_controller_device_id = d.device_id AND ab.status = 'active'\nWHERE d.device_type = 'temp_controller'\nGROUP BY d.device_id, d.device_name\nORDER BY d.device_name;",
+        "options": {}
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
       "position": [
-        1800,
-        400
+        18096,
+        6800
       ],
-      "id": "a9b8c7d6-0000-4000-8000-000000000022",
-      "name": "Reload Batches 2"
+      "id": "b1a2c3d4-0000-4000-8000-000000000102",
+      "name": "Get Controllers To Poll",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
     }
   ],
   "connections": {
@@ -595,7 +616,7 @@
       "main": [
         [
           {
-            "node": "Get Active Batches",
+            "node": "Get Pills To Poll",
             "type": "main",
             "index": 0
           }
@@ -606,7 +627,7 @@
       "main": [
         [
           {
-            "node": "Get Pill Telemetry",
+            "node": "Get Latest Readings",
             "type": "main",
             "index": 0
           }
@@ -695,17 +716,6 @@
         ]
       ]
     },
-    "Split Message Into Sections": {
-      "main": [
-        [
-          {
-            "node": "Send Routine Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Add Analysis Time": {
       "main": [
         [
@@ -736,7 +746,7 @@
             "index": 0
           },
           {
-            "node": "Split Message Into Sections",
+            "node": "Build Batch Embeds",
             "type": "main",
             "index": 0
           }
@@ -769,18 +779,7 @@
       "main": [
         [
           {
-            "node": "Reload Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Reload Batches": {
-      "main": [
-        [
-          {
-            "node": "Get Controller Telemetry",
+            "node": "Get Controllers To Poll",
             "type": "main",
             "index": 0
           }
@@ -791,18 +790,40 @@
       "main": [
         [
           {
-            "node": "Reload Batches 2",
+            "node": "Get Active Batches",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Reload Batches 2": {
+    "Build Batch Embeds": {
       "main": [
         [
           {
-            "node": "Get Latest Readings",
+            "node": "Send Routine Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pills To Poll": {
+      "main": [
+        [
+          {
+            "node": "Get Pill Telemetry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Controllers To Poll": {
+      "main": [
+        [
+          {
+            "node": "Get Controller Telemetry",
             "type": "main",
             "index": 0
           }
