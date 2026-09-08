@@ -579,6 +579,41 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 
 ---
 
+### 8.15 Brew Master — agent ตัวที่สองที่ถามคนละคำถาม (task #67, 8 ก.ย.)
+
+**คำถามตั้งต้น**: "เอา agent อีกตัวมาเช็คว่าตัวแรกตัดสินใจถูกไหมได้ไหม"
+
+**คำตอบจากหลักฐานในโปรเจกต์นี้เอง: judge แบบนั้นจับอะไรไม่ได้เลย** — ความผิดพลาดทุกครั้งที่เกิดขึ้นจริง (ตอบ `cold_crash` ให้ batch อายุ 11 ชม., ตอบจากค่าเก่า 2.8 ชม., `next_phase` ซ้ำกับ `phase`, แนะนำ target ต่างจากเดิม 0.01°C, JSON parse พัง) เป็นปัญหา **ข้อมูลเข้า** หรือ **กฎที่บังคับด้วยโค้ดได้** ทั้งหมด — AI ตัวที่สองที่อ่านข้อมูลผิดชุดเดียวกันก็สรุปผิดเหมือนกัน และ LLM-as-judge ที่เห็นคำตอบแรกก่อนมักเออออตาม (anchoring)
+
+**สิ่งที่ทำแทน: เปลี่ยนคำถาม ไม่ใช่เปลี่ยนผู้ตอบ**
+
+```
+ตัวแรก      "ตอนนี้อยู่เฟสไหนใน 7 เฟส"          → ดูกราฟ gravity/อุณหภูมิ
+brewmaster  "สิ่งที่กำลังเกิดขึ้นดีต่อเบียร์ไหม"    → ดูสูตร/ยีสต์/สไตล์/คุณภาพข้อมูล
+```
+
+**จุดออกแบบที่สำคัญที่สุด — จงใจไม่ส่งกราฟให้ brewmaster** พอไม่มีข้อมูลดิบ มันจึงตัดสินเฟสเองไม่ได้ในเชิงโครงสร้าง สองเสียงไม่ขัดกันในข้อความเดียว (ความเสี่ยงหลักของการมี AI สองตัว) ถ้าสงสัยว่าเฟสผิดจริงให้ตอบใน field `phase_doubt` ซึ่งแค่โชว์เป็นคำเตือน **ไม่เขียนทับเฟสและไม่แตะปุ่มปรับ target** — guard เดิมทั้งหมดยังคุมการสั่งงานจริงเหมือนเดิม
+
+ผลพลอยได้: prompt เหลือ **3,053 ตัวอักษร** เทียบกับ 10,692 ของตัวแรก ค่าใช้จ่ายจึงราว **$1/เดือน/batch** ไม่ใช่ ×2 อย่างที่ประเมินไว้ตอนแรก เพราะของแพงคือ series ซึ่งตัวนี้ไม่ต้องใช้
+
+**โครงใน `Phase Analysis Engine` (4 → 7 nodes)**:
+```
+Execute Workflow Trigger → Build AI Prompt → Call Claude → Parse AI Response
+                                → Build Brewmaster Prompt → Call Brewmaster → Parse Brewmaster
+```
+
+- `Build AI Prompt` ส่ง `brewmaster_context` ออกมาด้วย (สูตร/ยีสต์/แผน step/แผน dry hop/ชั่วโมงที่หมัก/baseline) — ทำที่นี่เพราะ node นี้อ่านแถว SQL ดิบอยู่แล้ว brewmaster จะได้ไม่ต้อง `itemMatching` ย้อนข้ามหลาย node กลับไปหา trigger ซึ่งเปราะกว่า พร้อมคำนวณ **`max_gap_hours`** (ช่องว่างที่กว้างที่สุดในกราฟ) ซึ่งต่างจาก `pill_stale_hours` ที่วัดแค่ "เงียบมานานเท่าไหร่นับจากจุดสุดท้าย"
+- `Call Brewmaster` ตั้ง `max_tokens: 1024` (prompt สั้น) + `onError: continueRegularOutput` + retry 2 ครั้ง — **brewmaster เป็นชั้นความเห็นเสริม ถ้ามันพังต้องไม่ลากให้ข้อความหลักหายไปทั้งรอบ**
+- `Parse Brewmaster` เป็น node สุดท้ายของ sub-workflow จึงต้องส่ง field เดิมของ `Parse AI Response` ผ่านไปครบ แล้วต่อ field `🍺 ความเห็น Brew Master` ท้าย embed ที่สร้างไว้แล้ว (แยกเป็น embed ใบใหม่ถ้าจะเกินลิมิตรวม 6,000)
+- ประเมิน 4 ด้าน: คุณภาพเบียร์ (ester/fusel/สไตล์) · ความเสี่ยงหมักไม่จบ (ยีสต์ตกก้น/attenuation/diacetyl/stuck) · ความตรงกับสูตร (อุณหภูมิ vs step และช่วงยีสต์, dry hop ใกล้กำหนด) · ความน่าเชื่อถือของข้อมูล
+- prompt ย้ำกฎเดิมของโปรเจกต์ว่า **gravity จาก Pill เป็น trend-only ห้ามเอาไปเทียบกับ OG/FG ในสูตร**
+
+**ทดสอบ** Node harness รัน pipeline จริงจากไฟล์ (`Build AI Prompt` → `Parse AI Response` → `Build Brewmaster Prompt` → `Parse Brewmaster`) ด้วยแถว SQL จริงของ batch 4: prompt ออกมา 3,053 ตัวอักษรครบทุกส่วน, embed รวม 1,350/6,000 ตัวอักษร, และ **เคส `Call Brewmaster` พัง** ยืนยันว่ายังได้ embed ปกติครบและ field เดิมไม่ตกหล่นสักตัว
+
+**ยังไม่ได้ทำ**: กัน spam เมื่อ brewmaster เตือนเรื่องเดิมซ้ำทุก 4 ชม. (เช่นอุณหภูมิต่ำกว่าขีดล่างยีสต์ จะพูดทุกรอบจนกว่าจะแก้) — ถ้ากวนค่อยเพิ่มกลไกแบบ `prep_alerted_for_phase` และตอนนี้ `/ferment_status` กับ `Phase Analysis Backtest` ก็เรียก brewmaster ด้วยเพราะอยู่ใน Engine ตัวเดียวกัน (backtest 14 วันจำลอง = +14 ครั้ง ~$0.11)
+
+---
+
 ### 8.14 `/ferment_status` ขาด CTE ครึ่งหนึ่ง + `fallback_gap` ประมาณอุณหภูมิเพี้ยน (task #66, 8 ก.ย.)
 
 **เจอจาก**: Pill01 เงียบไป 3.6 ชม. (RSSI -91 dBm ตู้เหล็กบังสัญญาณ แบตยัง 100%) แต่ข้อความ `/ferment_status` **ไม่เตือนอะไรเลย** และ prep_actions เขียนว่า "เตรียมแผน dry hop ช่วง biotransformation **หากมีในสูตร**" ทั้งที่ batch นี้ผูก recipe ไว้แล้ว
@@ -798,6 +833,7 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 - #64 แก้บั๊กร้ายแรง: วิเคราะห์ข้อมูล batch เก่าปนกับ batch ปัจจุบัน (`pill_series`/`controller_series` กรองแค่ `device_id` ไม่กรอง `start_date` — Pill ตัวเดียวใช้ซ้ำข้าม batch ได้ ส่งไป 1,091 จุดทั้งที่เป็นของ batch ปัจจุบันแค่ 23 จุด ทำให้ `/ferment_status` ตอบ `cold_crash` ให้ batch ที่หมักมา 11 ชม.) + แยกการเก็บ telemetry ออกจาก batch ให้เก็บต่อเนื่องแม้หมักจบ (เดิม `/ferment_stop` แล้วหยุดเก็บทันที ช่วง 26/08-07/09 ได้ 0 จุด) + เพิ่ม `end_date` ปิดขอบ batch พร้อม backfill — ✅ เสร็จ ทดสอบ query จริงบน VPS ทุกตัว + harness fan-out รอ reimport `Phase Analysis Cron` + `Discord Interactions Webhook` — 8 ก.ย.
 - #65 แยก `Telemetry Sync` (ดึง telemetry ทุก 15 นาที) ออกจาก `Phase Analysis Cron` (วิเคราะห์ทุก 4 ชม.) — แก้อาการ "แอป RAPT อ่าน 17.1°C แต่ AI ตอบ 19°C" ซึ่งเกิดจากข้อมูลใน DB เก่า 2.77 ชม. และพบระหว่างทางว่า `/ferment_status` ไม่ได้ดึงข้อมูลใหม่ก่อนวิเคราะห์เลย (สาย backfill ห้อยอยู่กับ `Create Batch` เป็นของ `/ferment_start` ล้วนๆ) ตอนนี้ข้อมูลเก่าไม่เกิน 15 นาทีทั้ง cron และ `/ferment_status` โดยไม่เพิ่มค่า AI — ✅ เสร็จ รอ **import `Telemetry Sync` (ไฟล์ใหม่)** + reimport `Phase Analysis Cron` แล้วเติม id ลง `workflows/.allowed-ids` — 8 ก.ย.
 - #66 `/ferment_status` ขาด CTE ไป 7 ตัวตั้งแต่ย้ายมาใช้ `Phase Analysis Engine` ร่วมกัน (ไม่เตือน Pill เงียบ ไม่รู้จักสูตร/ยีสต์/dry hop แนะนำ target ไม่ได้) + แก้ `fallback_gap` ที่ประมาณอุณหภูมิเบียร์เพี้ยน 3-4°C เพราะเกณฑ์ "เบียร์นิ่ง" หลวมเกินไป เพิ่มเงื่อนไขว่าตู้ต้องไล่ถึง target จริงแล้ว — ✅ เสร็จ ทดสอบกับ DB จริงทั้ง 3 query รอ **publish** `Discord Interactions Webhook` + `Phase Analysis Cron` + reimport `Phase Analysis Backtest` — 8 ก.ย.
+- #67 Brew Master — agent ตัวที่สองใน `Phase Analysis Engine` ที่ถามคนละคำถามกับตัวแรก ("สิ่งที่กำลังเกิดขึ้นดีต่อเบียร์ไหม" ไม่ใช่ "อยู่เฟสไหน") จงใจไม่ให้เห็นกราฟเพื่อไม่ให้แย่งงานตัดสินเฟส ประเมินคุณภาพเบียร์/ความเสี่ยงหมักไม่จบ/ความตรงกับสูตร/คุณภาพข้อมูล prompt 3,053 ตัวอักษร ~$1/เดือน — ✅ เสร็จ ทดสอบ harness ทั้ง pipeline + เคส brewmaster พัง รอ import + **publish** `Phase Analysis Engine` — 8 ก.ย.
 - ⚠️ **n8n เวอร์ชันนี้แยก draft กับ published** — import ไฟล์อัปเดตแค่ draft, trigger ยังรัน published เวอร์ชันเก่าจนกว่าจะกด Publish (หรือ Deactivate → Activate) เจอจริง 8 ก.ย.: import `Phase Analysis Cron` 3 รอบแล้ว cron 12:00 ยังรันเวอร์ชัน 22 ส.ค. ตอบ `cold_crash` ผิด เช็คได้จาก `workflow_entity.versionId` เทียบ `activeVersionId` และอ่าน node ที่รันจริงจาก `workflow_history` ไม่ใช่ `workflow_entity.nodes`
 
 ---
