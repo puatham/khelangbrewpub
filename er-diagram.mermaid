@@ -5,6 +5,7 @@ erDiagram
     DEVICES ||--o{ TEMP_CONTROLLER_READINGS : "device_id"
     DEVICES ||--o{ CONTROL_LOG : "device_id"
     BATCHES ||--o{ PHASE_LOG : "batch_id"
+    BATCHES ||--o| TEMP_ALERT_STATE : "batch_id"
 
     DEVICES {
         uuid device_id PK
@@ -72,4 +73,11 @@ erDiagram
     BOT_STATE {
         text key PK
         text value
+    }
+
+    TEMP_ALERT_STATE {
+        int batch_id PK
+        text alert_kind
+        timestamptz alerted_at
+        numeric alerted_value
     }

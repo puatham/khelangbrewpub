@@ -141,6 +141,20 @@ CREATE TABLE control_log (
 );
 
 -- ---------------------------------------------------------------------
+-- temp_alert_state: กันเตือนซ้ำของ Temp Guard (ตรวจอุณหภูมิทุก 15 นาทีใน
+-- Telemetry Sync) — 1 แถวต่อ 1 batch เก็บว่าเตือนเรื่องอะไรไปแล้วเมื่อไหร่
+-- ที่ค่าเท่าไหร่ เตือนซ้ำเฉพาะเมื่อเปลี่ยนชนิด/แย่ลง >=0.5C/ครบ cooldown 6 ชม.
+-- แถวถูกลบเมื่อสถานการณ์กลับเข้าเกณฑ์ เพื่อให้ครั้งหน้าที่หลุดเตือนได้ใหม่
+-- (หลักการเดียวกับ batches.prep_alerted_for_phase)
+-- ---------------------------------------------------------------------
+CREATE TABLE temp_alert_state (
+  batch_id INT PRIMARY KEY REFERENCES batches(batch_id),
+  alert_kind TEXT NOT NULL,   -- sensor_stale | controller_lag | rapid_change | yeast_low | yeast_high | arrived
+  alerted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  alerted_value NUMERIC
+);
+
+-- ---------------------------------------------------------------------
 -- bot_state: key-value เก็บ state ของ Discord command intake workflow
 -- (เช่น ID ข้อความล่าสุดที่ poll ไปแล้ว กันประมวลผลซ้ำ)
 -- ---------------------------------------------------------------------

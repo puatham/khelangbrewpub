@@ -290,78 +290,6 @@
       ],
       "id": "b1c2d3e4-0000-4000-8000-000000000003",
       "name": "Call Phase Analysis"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- อายุ reading ล่าสุดของแต่ละ sensor ต่อ batch active — รันเป็น branch ท้ายสุดของ\n-- Get Latest Readings (หลัง insert telemetry รอบนี้เสร็จแล้วตามลำดับ branch) เพื่อจับเคส\n-- sensor เงียบ (Pill แบตหมด/หลุด WiFi/ตู้ถูกถอดปลั๊ก) ที่เดิมระบบวิเคราะห์ข้อมูลเก่าไปเงียบๆ\nSELECT b.batch_id, b.beer_name,\n  pd.device_name AS pill_name,\n  cd.device_name AS controller_name,\n  EXTRACT(EPOCH FROM (now() - (SELECT MAX(pr.time_utc) FROM pill_readings pr WHERE pr.device_id = b.pill_device_id)))/3600 AS pill_age_h,\n  EXTRACT(EPOCH FROM (now() - (SELECT MAX(cr.time_utc) FROM temp_controller_readings cr WHERE cr.device_id = b.temp_controller_device_id)))/3600 AS ctrl_age_h\nFROM batches b\nLEFT JOIN devices pd ON pd.device_id = b.pill_device_id\nLEFT JOIN devices cd ON cd.device_id = b.temp_controller_device_id\nWHERE b.status = 'active';",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        1780,
-        900
-      ],
-      "id": "f1a2b3c4-0000-4000-8000-000000000010",
-      "name": "Check Sensor Freshness",
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      },
-      "executeOnce": true
-    },
-    {
-      "parameters": {
-        "jsCode": "// loop ทุก item (1 item = 1 batch active) ตามกฎ $input.all() — สร้างข้อความเตือนเฉพาะ\n// sensor ที่เงียบเกิน threshold แล้วเท่านั้น ถ้าไม่มีตัวไหนเงียบ return [] (HTTP node\n// ถัดไปจะไม่ยิงอะไรเลย)\n// threshold 6 ชม. = ขาดข้อมูลเกิน 1 รอบ cron เต็มๆ (cron รันทุก 4 ชม. + RAPT รายงานทุก\n// ~15-45 นาที) — ตั้งสูงไว้กัน false positive จากจังหวะ fetch/ลำดับ branch เพราะถึง\n// sensor แค่สะดุดชั่วคราวก็ไม่ควรแจ้งเตือนพร่ำเพรื่อ\nconst THRESHOLD_H = 6;\nconst items = $input.all();\nconst results = [];\nitems.forEach((it) => {\n  const d = it.json;\n  const problems = [];\n  if (d.pill_age_h == null) {\n    problems.push('Pill \"' + (d.pill_name || '-') + '\" ไม่มีข้อมูลเลย');\n  } else if (Number(d.pill_age_h) > THRESHOLD_H) {\n    problems.push('Pill \"' + (d.pill_name || '-') + '\" เงียบมา ' + Number(d.pill_age_h).toFixed(1) + ' ชม.');\n  }\n  if (d.ctrl_age_h == null) {\n    problems.push('ตู้ควบคุม \"' + (d.controller_name || '-') + '\" ไม่มีข้อมูลเลย');\n  } else if (Number(d.ctrl_age_h) > THRESHOLD_H) {\n    problems.push('ตู้ควบคุม \"' + (d.controller_name || '-') + '\" เงียบมา ' + Number(d.ctrl_age_h).toFixed(1) + ' ชม.');\n  }\n  if (problems.length) {\n    results.push({\n      json: {\n        content: '📡 เซ็นเซอร์ไม่ส่งข้อมูล — ' + d.beer_name + ':\\n• ' + problems.join('\\n• ') + '\\nเช็คแบต Pill / WiFi / ปลั๊กตู้ควบคุม แล้วดูใน RAPT portal ว่า device ยัง online ไหม'\n      }\n    });\n  }\n});\nreturn results;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        900
-      ],
-      "id": "f1a2b3c4-0000-4000-8000-000000000011",
-      "name": "Build Sensor Alert"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "discordBotApi",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ content: $json.content }) }}",
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 1100
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        2220,
-        900
-      ],
-      "id": "f1a2b3c4-0000-4000-8000-000000000012",
-      "name": "Send Sensor Alert",
-      "credentials": {
-        "discordBotApi": {
-          "id": "UoXr9Yvwl24SlcYu",
-          "name": "Discord Bot account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
     }
   ],
   "connections": {
@@ -392,11 +320,6 @@
         [
           {
             "node": "Add Analysis Time",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Check Sensor Freshness",
             "type": "main",
             "index": 0
           }
@@ -456,28 +379,6 @@
           },
           {
             "node": "Build Batch Embeds",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check Sensor Freshness": {
-      "main": [
-        [
-          {
-            "node": "Build Sensor Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Sensor Alert": {
-      "main": [
-        [
-          {
-            "node": "Send Sensor Alert",
             "type": "main",
             "index": 0
           }

@@ -255,6 +255,78 @@
         }
       },
       "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Temp Guard — ตรวจอุณหภูมิเบียร์ทุก 15 นาทีด้วยโค้ดล้วน ไม่ใช้ AI\n-- เกณฑ์ทุกตัวมาจากการวัดพฤติกรรมจริงของตู้ (8 ก.ย.) ไม่ได้เดา:\n--   ตู้เบี่ยงจาก target หลัง target นิ่งเกิน 6 ชม. p50=0.10 p95=1.63 p99=2.75 → ตั้ง 2.5\n--   Pill เปลี่ยน p95=0.75 p99=1.49 °C/ชม. → ตั้ง 1.5\n-- **ทุกอย่างอิง target ที่บันทึกใน temp_controller_readings ไม่ใช่ control_log** เพราะ control_log\n-- มีแค่การปรับที่ผ่านบอท (5 จาก 14 ครั้ง) อีก 9 ครั้งผู้ใช้ปรับตรงในแอป RAPT\nWITH act AS (\n  SELECT b.batch_id, b.beer_name, b.pill_device_id, b.temp_controller_device_id, b.current_phase,\n         y.min_temp_c AS yeast_min, y.max_temp_c AS yeast_max\n  FROM batches b\n  LEFT JOIN recipes rc ON rc.recipe_id = b.recipe_id\n  LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(rc.yeast_name))\n  WHERE b.status = 'active'\n),\npill_now AS (\n  SELECT a.batch_id,\n         (SELECT p.temperature_c FROM pill_readings p WHERE p.device_id=a.pill_device_id ORDER BY p.time_utc DESC LIMIT 1) AS pill,\n         (SELECT p.time_utc FROM pill_readings p WHERE p.device_id=a.pill_device_id ORDER BY p.time_utc DESC LIMIT 1) AS pill_at,\n         (SELECT p.temperature_c FROM pill_readings p WHERE p.device_id=a.pill_device_id\n            AND p.time_utc <= now() - INTERVAL '1 hour' ORDER BY p.time_utc DESC LIMIT 1) AS pill_1h\n  FROM act a\n),\nctrl_now AS (\n  SELECT a.batch_id,\n         (SELECT c.temperature_c FROM temp_controller_readings c WHERE c.device_id=a.temp_controller_device_id ORDER BY c.time_utc DESC LIMIT 1) AS ctrl,\n         (SELECT c.target_temperature_c FROM temp_controller_readings c WHERE c.device_id=a.temp_controller_device_id ORDER BY c.time_utc DESC LIMIT 1) AS tgt,\n         -- เวลาที่ target เปลี่ยนค่าล่าสุด อ่านจาก readings เอง\n         (SELECT max(x.time_utc) FROM (\n            SELECT c.time_utc, c.target_temperature_c,\n                   LAG(c.target_temperature_c) OVER (ORDER BY c.time_utc) AS prev\n            FROM temp_controller_readings c WHERE c.device_id=a.temp_controller_device_id) x\n          WHERE x.prev IS NOT NULL AND round(x.target_temperature_c::numeric,2) IS DISTINCT FROM round(x.prev::numeric,2)) AS tgt_changed_at,\n         -- ค่าเบี่ยงเมื่อ 1 ชม.ก่อน ใช้ดูว่ากำลังไล่เข้าเป้าอยู่หรือค้าง\n         (SELECT abs(c.temperature_c - c.target_temperature_c) FROM temp_controller_readings c\n           WHERE c.device_id=a.temp_controller_device_id AND c.time_utc <= now() - INTERVAL '1 hour'\n           ORDER BY c.time_utc DESC LIMIT 1) AS dev_1h,\n         (SELECT max(c.time_utc) FROM temp_controller_readings c WHERE c.device_id=a.temp_controller_device_id) AS ctrl_at\n  FROM act a\n),\nm AS (\n  SELECT a.*, p.pill, p.pill_at, p.pill_1h, c.ctrl, c.tgt, c.tgt_changed_at, c.dev_1h,\n         abs(c.ctrl - c.tgt) AS dev,\n         abs(p.pill - p.pill_1h) AS pill_move_1h,\n         EXTRACT(EPOCH FROM (now() - COALESCE(c.tgt_changed_at, now() - INTERVAL '99 hours')))/3600 AS tgt_stable_h,\n         EXTRACT(EPOCH FROM (now() - p.pill_at))/3600 AS pill_age_h,\n         EXTRACT(EPOCH FROM (now() - c.ctrl_at))/3600 AS ctrl_age_h\n  FROM act a JOIN pill_now p ON p.batch_id=a.batch_id JOIN ctrl_now c ON c.batch_id=a.batch_id\n),\ndecided AS (\n  SELECT m.*,\n    CASE\n      -- เซ็นเซอร์เงียบ = ทุกค่าด้านล่างเชื่อไม่ได้ ต้องแจ้งตัวนี้ก่อนเป็นอันดับแรก\n      -- เกณฑ์ 2 ชม.ตรงกับ PILL_STALE_THRESHOLD_H ที่ Phase Analysis Engine ใช้อยู่แล้ว\n      -- (ตัวนี้มาแทน Check Sensor Freshness ในรอบ cron 4 ชม. ที่เกณฑ์ 6 ชม.และไม่มี dedupe เลย)\n      WHEN pill IS NULL OR pill_age_h > 2 OR ctrl_age_h IS NULL OR ctrl_age_h > 2 THEN 'sensor_stale'\n      -- C ตู้คุมไม่อยู่: เบี่ยงเกิน 2.5°C (สูงกว่า p99 ของตู้ที่นิ่งแล้ว) ต่อเนื่อง 1 ชม.\n      --   และ \"ไม่ได้กำลังไล่เข้าเป้า\" (เบี่ยงไม่ลดลงอย่างน้อย 0.3°C ใน 1 ชม.) — เงื่อนไขหลังนี้\n      --   คือตัวแยก \"ตู้พัง\" ออกจาก \"กำลัง ramp ตามคำสั่ง\" ซึ่ง cold crash ใช้เวลา 8 ชม.+\n      WHEN dev > 2.5 AND dev_1h IS NOT NULL AND dev_1h > 2.5 AND dev > dev_1h - 0.3 THEN 'controller_lag'\n      -- D เปลี่ยนเร็วผิดปกติ: >1.5°C/ชม. (p99=1.49) ทั้งที่ target ไม่ได้เพิ่งเปลี่ยน\n      WHEN pill_move_1h > 1.5 AND tgt_stable_h > 1 THEN 'rapid_change'\n      -- B หลุดช่วงยีสต์: เผื่อ 0.2°C กันแกว่งไปมาตรงขอบพอดี\n      WHEN yeast_min IS NOT NULL AND pill < yeast_min - 0.2 THEN 'yeast_low'\n      WHEN yeast_max IS NOT NULL AND pill > yeast_max + 0.2 THEN 'yeast_high'\n      -- A ถึงเป้าแล้ว: เบียร์นิ่ง (<0.15°C/ชม.) หลัง target เปลี่ยนมาแล้ว 2-12 ชม.\n      --   ไม่ต้องรู้ gap เลย เพราะ \"นิ่ง\" คือนิยามของการถึงที่หมายอยู่แล้ว\n      WHEN pill_move_1h < 0.15 AND tgt_stable_h BETWEEN 2 AND 12 THEN 'arrived'\n      ELSE NULL\n    END AS kind\n  FROM m\n),\ncleared AS (\n  -- เงื่อนไขหายแล้ว → ล้าง state เพื่อให้ครั้งหน้าที่หลุดเตือนได้ใหม่\n  DELETE FROM temp_alert_state s USING decided d\n  WHERE s.batch_id = d.batch_id AND d.kind IS NULL RETURNING s.batch_id\n),\nsent AS (\n  INSERT INTO temp_alert_state (batch_id, alert_kind, alerted_at, alerted_value)\n  -- sensor_stale ส่ง alerted_value เป็น NULL เพื่อให้ dedupe อาศัย cooldown 6 ชม.อย่างเดียว\n  -- ไม่งั้นอายุที่เพิ่มขึ้นเรื่อยๆ จะทำให้เข้าเงื่อนไข \"แย่ลง ≥0.5\" แล้วเตือนซ้ำทุกครึ่งชั่วโมง\n  SELECT batch_id, kind, now(), CASE WHEN kind = 'sensor_stale' THEN NULL ELSE pill END FROM decided WHERE kind IS NOT NULL\n  ON CONFLICT (batch_id) DO UPDATE\n    SET alert_kind = EXCLUDED.alert_kind, alerted_at = now(), alerted_value = EXCLUDED.alerted_value\n    -- เตือนซ้ำเฉพาะเมื่อเปลี่ยนชนิด / แย่ลง ≥0.5°C / ครบ cooldown 6 ชม.\n    WHERE temp_alert_state.alert_kind IS DISTINCT FROM EXCLUDED.alert_kind\n       OR abs(COALESCE(temp_alert_state.alerted_value,0) - COALESCE(EXCLUDED.alerted_value,0)) >= 0.5\n       OR temp_alert_state.alerted_at < now() - INTERVAL '6 hours'\n  RETURNING batch_id\n)\nSELECT d.batch_id, d.beer_name, d.kind AS alert_kind, d.current_phase,\n       round(d.pill::numeric,2) AS pill_c, round(d.ctrl::numeric,2) AS ctrl_c, round(d.tgt::numeric,2) AS target_c,\n       round(d.dev::numeric,2) AS ctrl_dev_c, round(d.pill_move_1h::numeric,2) AS pill_move_1h_c,\n       round(d.tgt_stable_h::numeric,1) AS tgt_stable_h,\n       round(d.pill_age_h::numeric,1) AS pill_age_h, round(d.ctrl_age_h::numeric,1) AS ctrl_age_h,\n       d.yeast_min, d.yeast_max\nFROM decided d JOIN sent s ON s.batch_id = d.batch_id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2240,
+        0
+      ],
+      "id": "7e30d000-0000-4000-8000-000000000301",
+      "name": "Check Temp Bounds",
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// สร้างข้อความเตือนจากผล Check Temp Bounds — โค้ดล้วน ไม่มี AI ไม่มีค่า token\n// เกาะไปกับ Telemetry Sync ที่รันทุก 15 นาที จึงรู้เร็วกว่ารายงาน AI ทุก 4 ชม.ถึง 16 เท่า\n// (เจอจริง 8 ก.ย.: เบียร์หลุดต่ำกว่าขีดล่างยีสต์ตั้งแต่ ~09:00 แต่กว่าจะรู้คือรายงาน 18:01)\nconst COLOR = { sensor_stale: 0x95a5a6, controller_lag: 0xe74c3c, rapid_change: 0xe74c3c,\n                yeast_low: 0xe67e22, yeast_high: 0xe67e22, arrived: 0x2ecc71 };\n// ดันให้เข้ามาในช่วงยีสต์ 0.5°C ไม่ใช่จ่อขอบพอดี กันแกว่งออกอีกรอบทันที\nconst INSIDE_MARGIN_C = 0.5;\n// จำกัดการขยับต่อครั้ง — ข้อเสนอมาจากสูตรคำนวณ ไม่ใช่คนดูของจริง อย่าให้สั่งกระโดดไกล\nconst MAX_NUDGE_C = 2.0;\n\nfunction f(v, n) { return v == null ? '-' : Number(v).toFixed(n); }\n\nconst results = [];\n$input.all().forEach((it) => {\n  const d = it.json;\n  const pill = d.pill_c != null ? Number(d.pill_c) : null;\n  const tgt = d.target_c != null ? Number(d.target_c) : null;\n  let title, lines = [], wantPill = null;\n\n  switch (d.alert_kind) {\n    case 'sensor_stale':\n      title = '📡 เซ็นเซอร์เงียบ — ' + d.beer_name;\n      lines.push('Pill เงียบมา ' + f(d.pill_age_h, 1) + ' ชม. · ตู้ควบคุม ' + f(d.ctrl_age_h, 1) + ' ชม.');\n      lines.push('ค่าที่ระบบใช้วิเคราะห์ตอนนี้เป็นข้อมูลค้าง — เช็คแบต Pill / WiFi / ปลั๊กตู้ แล้วดูใน RAPT portal ว่า device ยัง online ไหม');\n      break;\n    case 'controller_lag':\n      title = '🔴 ตู้ควบคุมไล่อุณหภูมิไม่ถึงเป้า — ' + d.beer_name;\n      lines.push('ตู้ ' + f(d.ctrl_c, 2) + '°C ห่างจาก target ' + f(d.target_c, 2) + '°C อยู่ ' + f(d.ctrl_dev_c, 2) + '°C มาเกิน 1 ชม.และไม่ลดลง');\n      lines.push('ไม่ใช่การไล่อุณหภูมิตามคำสั่งปกติ — ไปดูของจริง: คอมเพรสเซอร์ทำงานไหม ประตูปิดสนิทไหม ของในตู้แน่นเกินไปหรือเปล่า');\n      lines.push('**อย่าเพิ่งปรับ target** เพราะปัญหาไม่ได้อยู่ที่ค่าที่ตั้ง');\n      break;\n    case 'rapid_change':\n      title = '🔴 อุณหภูมิเบียร์เปลี่ยนเร็วผิดปกติ — ' + d.beer_name;\n      lines.push('Pill ขยับ ' + f(d.pill_move_1h_c, 2) + '°C ใน 1 ชม. ทั้งที่ target ไม่ได้เปลี่ยน (ปกติไม่เกิน 1.5°C/ชม.)');\n      lines.push('ล่าสุด ' + f(d.pill_c, 2) + '°C — เปิดประตูตู้ค้างไว้หรือเปล่า หรือระบบทำความเย็น/ฮีตเตอร์มีปัญหา');\n      break;\n    case 'yeast_low':\n      title = '⚠️ อุณหภูมิเบียร์ต่ำกว่าที่ยีสต์รองรับ — ' + d.beer_name;\n      lines.push('เบียร์ ' + f(d.pill_c, 2) + '°C ต่ำกว่าขีดล่าง ' + f(d.yeast_min, 0) + '°C อยู่ ' + f(Number(d.yeast_min) - pill, 2) + '°C');\n      lines.push('เสี่ยงยีสต์ทำงานช้าลง ตกก้นก่อนกินน้ำตาลหมด หรือเก็บ diacetyl ไม่หมด');\n      wantPill = Number(d.yeast_min) + INSIDE_MARGIN_C;\n      break;\n    case 'yeast_high':\n      title = '⚠️ อุณหภูมิเบียร์สูงกว่าที่ยีสต์รองรับ — ' + d.beer_name;\n      lines.push('เบียร์ ' + f(d.pill_c, 2) + '°C สูงกว่าขีดบน ' + f(d.yeast_max, 0) + '°C อยู่ ' + f(pill - Number(d.yeast_max), 2) + '°C');\n      lines.push('เสี่ยง fusel alcohol (กลิ่นแสบ ดื่มแล้วปวดหัว) และ ester แรงเกินสไตล์');\n      wantPill = Number(d.yeast_max) - INSIDE_MARGIN_C;\n      break;\n    case 'arrived':\n      title = '✅ อุณหภูมิเบียร์นิ่งแล้ว — ' + d.beer_name;\n      lines.push('เบียร์นิ่งที่ ' + f(d.pill_c, 2) + '°C (ขยับ ' + f(d.pill_move_1h_c, 2) + '°C ใน 1 ชม.ล่าสุด) หลังตั้ง target ' + f(d.target_c, 2) + '°C มา ' + f(d.tgt_stable_h, 1) + ' ชม.');\n      lines.push('ถึงที่หมายแล้ว เริ่มนับเวลาของเฟสนี้ได้');\n      break;\n    default:\n      return;\n  }\n\n  // target ใหม่แบบ \"ขยับสัมพัทธ์\" — ไม่ต้องรู้ส่วนต่าง Pill-ตู้เลย เพราะอยากให้เบียร์ขึ้นเท่าไหร่\n  // ก็ขยับ target ขึ้นเท่านั้น ส่วนต่างหักล้างกันไปเอง (ต่างจากการแปลงแบบสัมบูรณ์ที่ต้องใช้\n  // stable_gap_c ซึ่งมักไม่มีค่าในช่วง 2 ชม.แรกหลังปรับ target)\n  // เสนอขยับได้เฉพาะตอนตู้ไล่ถึง target แล้วจริง — ถ้ายังไล่ไม่ถึง เบียร์กำลังจะขยับเองอยู่แล้ว\n  // การขยับ target ซ้ำตอนนั้นจะ over-correct (เจอจริง 8 ก.ย.: ตู้ 15.98 vs target 16.50 ถ้าไล่\n  // ถึง 16.50 เบียร์จะขึ้นไป ~18.2 เองโดยไม่ต้องทำอะไร)\n  const ctrlSettled = d.ctrl_c != null && tgt != null && Math.abs(Number(d.ctrl_c) - tgt) <= 0.5;\n  let buttonTarget = null;\n  if (wantPill != null && !ctrlSettled) {\n    lines.push('⏳ ยังไม่เสนอปรับ target — ตู้อยู่ ' + f(d.ctrl_c, 2) + '°C ยังไล่ไม่ถึง target ' + f(tgt, 2) + '°C เบียร์อาจขยับเข้าที่เองเมื่อตู้ถึงเป้า');\n  }\n  if (wantPill != null && ctrlSettled && pill != null && tgt != null) {\n    const nudge = Math.max(-MAX_NUDGE_C, Math.min(MAX_NUDGE_C, wantPill - pill));\n    const t = Number((tgt + nudge).toFixed(2));\n    if (Math.abs(t - tgt) >= 0.5 && t >= 0 && t <= 30) buttonTarget = t;\n  }\n  if (buttonTarget != null) {\n    lines.push('🌡️ เสนอปรับ target ตู้เป็น ' + f(buttonTarget, 2) + '°C (ขยับ ' + (buttonTarget > tgt ? '+' : '') + f(buttonTarget - tgt, 2) + '°C เพื่อดันเบียร์ไปที่ ~' + f(wantPill, 2) + '°C)');\n  }\n\n  results.push({\n    json: {\n      batch_id: d.batch_id,\n      alert_kind: d.alert_kind,\n      button_target_c: buttonTarget,\n      embeds: [{\n        title: title.length > 256 ? title.slice(0, 255) + '…' : title,\n        color: COLOR[d.alert_kind] || 0x95a5a6,\n        description: lines.join('\\n').slice(0, 4096),\n        footer: { text: 'เฟส ' + (d.current_phase || '-') + ' · ตรวจทุก 15 นาทีโดย Temp Guard' }\n      }]\n    }\n  });\n});\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        0
+      ],
+      "id": "7e30d000-0000-4000-8000-000000000302",
+      "name": "Build Temp Alert"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://discord.com/api/v10/channels/1537779906820177940/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ embeds: $json.embeds, components: ($json.button_target_c != null) ? [{ type: 1, components: [{ type: 2, style: 1, label: '🌡️ ปรับ target → ' + $json.button_target_c.toFixed(2) + '°C', custom_id: 'settemp|' + $json.batch_id + '|' + $json.button_target_c.toFixed(2) + '|' + $json.alert_kind }] }] : undefined }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1100
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2688,
+        0
+      ],
+      "id": "7e30d000-0000-4000-8000-000000000303",
+      "name": "Send Temp Alert",
+      "credentials": {
+        "discordBotApi": {
+          "id": "UoXr9Yvwl24SlcYu",
+          "name": "Discord Bot account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     }
   ],
   "connections": {
@@ -351,6 +423,39 @@
         [
           {
             "node": "Insert Controller Readings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Controller Readings": {
+      "main": [
+        [
+          {
+            "node": "Check Temp Bounds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Temp Bounds": {
+      "main": [
+        [
+          {
+            "node": "Build Temp Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Temp Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Temp Alert",
             "type": "main",
             "index": 0
           }
