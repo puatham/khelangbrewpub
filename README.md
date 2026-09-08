@@ -621,6 +621,20 @@ Execute Workflow Trigger → Build AI Prompt → Call Claude → Parse AI Respon
 
 ทดสอบ guard ข้อ 2 ทั้งสองทาง: ตอบ `phase_agrees=true` พร้อมเหตุผลมาด้วย → ข้อความถูกทิ้ง ไม่โผล่ใน embed / ตอบ `phase_agrees=false` → โชว์ตามปกติ
 
+#### ให้ brewmaster เสนอปรับ target ได้ (task #68)
+
+รอบที่รันจริงชี้ปัญหาถูกแต่ไม่บอกทางออก — เขียนว่า *"อุณหภูมิเบียร์ต่ำกว่าขีดล่างยีสต์ อาจทำให้ attenuation ไม่ถึงเป้า 75-82%"* แล้วจบ ไม่ได้บอกว่าควรตั้งตู้เท่าไหร่ และ **agent ตัวแรกเสนอให้ไม่ได้ด้วยโครงสร้าง** เพราะกฎมันคือเสนอ target เฉพาะตอน `approaching_transition=true` และ `next_phase` เป็น `diacetyl_rest`/`cold_crash` เท่านั้น ช่วงหมักปกติจึงไม่มีใครดูแลเลย
+
+**แบ่งหน้าที่**: agent ตัวแรกปรับ target **ตามแผน** (เข้า d-rest/cold crash) · brewmaster ปรับ **เพื่อแก้ไข** (เบียร์หลุดช่วงยีสต์/ห่างจาก step สูตร) — ไม่ทับกัน
+
+brewmaster ตอบเป็น **อุณหภูมิเบียร์ (Pill) ที่อยากให้ไปถึง** เหมือน agent ตัวแรก แล้วโค้ดแปลงเป็น target ตู้ด้วย `stable_gap_c` ทางเดียวกัน ไม่สร้างทางคำนวณใหม่ที่อาจผิด
+
+**guard ระดับโค้ดใน `Parse Brewmaster`** (ไม่เชื่อ prompt อย่างเดียว ตามแนวเดิมของโปรเจกต์): ทิ้งถ้า agent ตัวแรกเสนออยู่แล้ว · ทิ้งถ้าเฟสเป็น `diacetyl_rest`/`cold_crash` · ต้องอยู่ในช่วงที่ยีสต์รองรับ · ต้องต่างจาก target ปัจจุบัน **≥ 0.5°C** (ไม่ใช่ 2.5°C ของ agent ตัวแรก — 0.5 คือขอบล่างที่มีความหมายจริงเพราะตู้คุมแบบตัด-ต่อแกว่งราว ±0.5°C อยู่แล้ว ส่วน 2.5 ตั้งไว้กัน noise จากการคำนวณ `stable_gap_c` ใหม่ทุกรอบ ซึ่งหยาบเกินไปสำหรับการแก้ระดับ 1°C) · sanity 0-30°C · ไม่มี `stable_gap_c` → แสดงเป็นข้อความอย่างเดียวไม่มีปุ่ม
+
+**ปุ่มมาได้ 2 ทาง** — `Build Batch Embeds` เลือกแหล่งแล้วส่ง `button_target_c`/`button_remark` ให้ `Send Routine Update` โดยตัวแรกมาก่อนเสมอ `custom_id` ของ brewmaster ใช้ remark ว่า `brewmaster` (`settemp|4|16.60|brewmaster`) → บันทึกลง `control_log` → ย้อนกลับเข้า prompt รอบถัดไปเป็นประวัติการปรับ ระบบจึงรู้เองว่าการปรับครั้งนั้นมาจากข้อเสนอของใคร
+
+ทดสอบ harness ครบ 6 เส้นทาง: เสนอ 18.5°C มี gap → ได้ปุ่ม `settemp|4|16.60|brewmaster` · เสนอ 26°C เกินช่วงยีสต์ → ทิ้ง · agent ตัวแรกเสนออยู่แล้ว → brewmaster เงียบ ปุ่มเป็นของตัวแรก · เฟส `cold_crash` → ทิ้ง · ต่างจาก target 0.3°C → ทิ้ง · ไม่มี `stable_gap_c` → ได้ข้อความพร้อมเหตุผลว่าทำไมยังคำนวณ target ไม่ได้ ไม่มีปุ่ม
+
 **ยังไม่ได้ทำ**: กัน spam เมื่อ brewmaster เตือนเรื่องเดิมซ้ำทุก 4 ชม. (เช่นอุณหภูมิต่ำกว่าขีดล่างยีสต์ จะพูดทุกรอบจนกว่าจะแก้) — ถ้ากวนค่อยเพิ่มกลไกแบบ `prep_alerted_for_phase` และตอนนี้ `/ferment_status` กับ `Phase Analysis Backtest` ก็เรียก brewmaster ด้วยเพราะอยู่ใน Engine ตัวเดียวกัน (backtest 14 วันจำลอง = +14 ครั้ง ~$0.11)
 
 ---
@@ -845,6 +859,7 @@ Execute Workflow Trigger → Build AI Prompt → Call Claude → Parse AI Respon
 - #65 แยก `Telemetry Sync` (ดึง telemetry ทุก 15 นาที) ออกจาก `Phase Analysis Cron` (วิเคราะห์ทุก 4 ชม.) — แก้อาการ "แอป RAPT อ่าน 17.1°C แต่ AI ตอบ 19°C" ซึ่งเกิดจากข้อมูลใน DB เก่า 2.77 ชม. และพบระหว่างทางว่า `/ferment_status` ไม่ได้ดึงข้อมูลใหม่ก่อนวิเคราะห์เลย (สาย backfill ห้อยอยู่กับ `Create Batch` เป็นของ `/ferment_start` ล้วนๆ) ตอนนี้ข้อมูลเก่าไม่เกิน 15 นาทีทั้ง cron และ `/ferment_status` โดยไม่เพิ่มค่า AI — ✅ เสร็จ รอ **import `Telemetry Sync` (ไฟล์ใหม่)** + reimport `Phase Analysis Cron` แล้วเติม id ลง `workflows/.allowed-ids` — 8 ก.ย.
 - #66 `/ferment_status` ขาด CTE ไป 7 ตัวตั้งแต่ย้ายมาใช้ `Phase Analysis Engine` ร่วมกัน (ไม่เตือน Pill เงียบ ไม่รู้จักสูตร/ยีสต์/dry hop แนะนำ target ไม่ได้) + แก้ `fallback_gap` ที่ประมาณอุณหภูมิเบียร์เพี้ยน 3-4°C เพราะเกณฑ์ "เบียร์นิ่ง" หลวมเกินไป เพิ่มเงื่อนไขว่าตู้ต้องไล่ถึง target จริงแล้ว — ✅ เสร็จ ทดสอบกับ DB จริงทั้ง 3 query รอ **publish** `Discord Interactions Webhook` + `Phase Analysis Cron` + reimport `Phase Analysis Backtest` — 8 ก.ย.
 - #67 Brew Master — agent ตัวที่สองใน `Phase Analysis Engine` ที่ถามคนละคำถามกับตัวแรก ("สิ่งที่กำลังเกิดขึ้นดีต่อเบียร์ไหม" ไม่ใช่ "อยู่เฟสไหน") จงใจไม่ให้เห็นกราฟเพื่อไม่ให้แย่งงานตัดสินเฟส ประเมินคุณภาพเบียร์/ความเสี่ยงหมักไม่จบ/ความตรงกับสูตร/คุณภาพข้อมูล prompt 3,053 ตัวอักษร ~$1/เดือน — ✅ เสร็จ ทดสอบ harness ทั้ง pipeline + เคส brewmaster พัง รอ import + **publish** `Phase Analysis Engine` — 8 ก.ย.
+- #68 ให้ Brew Master เสนอปรับ target ได้ — agent ตัวแรกเสนอเฉพาะการปรับตามแผน (เข้า d-rest/cold crash) ช่วงหมักปกติจึงไม่มีใครดูแลเลย ตอนนี้ brewmaster เสนอการปรับ "เพื่อแก้ไข" ได้ (เบียร์หลุดช่วงยีสต์/ห่างจาก step สูตร) พร้อมปุ่มกดใน Discord ที่บันทึก remark ว่า `brewmaster` ลง control_log — guard ระดับโค้ด 6 ชั้นกันเสนอซ้อน/นอกช่วงยีสต์/เปลี่ยนน้อยเกินจะมีผล — ✅ เสร็จ ทดสอบ harness ครบ 6 เส้นทาง รอ import + **publish** `Phase Analysis Engine` + `Phase Analysis Cron` — 8 ก.ย.
 - ⚠️ **n8n เวอร์ชันนี้แยก draft กับ published** — import ไฟล์อัปเดตแค่ draft, trigger ยังรัน published เวอร์ชันเก่าจนกว่าจะกด Publish (หรือ Deactivate → Activate) เจอจริง 8 ก.ย.: import `Phase Analysis Cron` 3 รอบแล้ว cron 12:00 ยังรันเวอร์ชัน 22 ส.ค. ตอบ `cold_crash` ผิด เช็คได้จาก `workflow_entity.versionId` เทียบ `activeVersionId` และอ่าน node ที่รันจริงจาก `workflow_history` ไม่ใช่ `workflow_entity.nodes`
 
 ---
