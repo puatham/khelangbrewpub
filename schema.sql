@@ -62,6 +62,13 @@ CREATE TABLE batches (
   -- ใช้ซ้ำข้าม batch ได้ และตั้งแต่เปลี่ยนไป poll telemetry ต่อเนื่องไม่ผูกกับ batch
   -- ข้อมูลก็ยังไหลเข้ามาหลังหมักจบ — ไม่มีคอลัมน์นี้จะแยกไม่ออกว่า reading ไหนของ batch ไหน
   end_date TIMESTAMPTZ,
+  -- ช่วงอุณหภูมิ "ของเบียร์ (Pill)" ที่ผู้หมักตั้งใจให้อยู่ในเฟสปัจจุบัน (NULL = ไม่ได้ตั้ง)
+  -- ต่างจากช่วงของยีสต์ (yeasts.min_temp_c/max_temp_c) ซึ่งเป็นสเปกผู้ผลิตและกว้างมาก
+  -- (Verdant IPA 18-25°C) — ช่วงนี้แคบกว่าและสะท้อนเจตนา เช่น 18.0-18.5 ตอน primary
+  -- Temp Guard เตือนแบบ "เฝ้าดู" เมื่อหลุดช่วงนี้ และเตือนแรงกว่าเมื่อหลุดช่วงยีสต์
+  -- ตั้ง/ล้างผ่าน /ferment_band — ไม่เลื่อนตามเฟสเอง ต้องสั่งใหม่เมื่อเปลี่ยนช่วงการหมัก
+  beer_band_low_c NUMERIC,
+  beer_band_high_c NUMERIC,
   target_fg NUMERIC,
   beer_name TEXT,
   current_phase TEXT DEFAULT 'lag',

@@ -187,7 +187,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp', ferment_recipes: 'recipes' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    search: params.search || null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp', ferment_recipes: 'recipes', ferment_band: 'band' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    search: params.search || null,\n    band_low: params.low != null ? Number(params.low) : null,\n    band_high: params.high != null ? Number(params.high) : null,\n    band_clear: params.clear === true,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1348,6 +1348,75 @@
       ],
       "id": "d1e2f3a4-0000-4000-8000-000000000005",
       "name": "Call Phase Analysis (Status)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ตั้ง/ล้างช่วงอุณหภูมิ \"ของเบียร์\" ที่ยอมรับได้ของ batch ที่ active อยู่ของ Pill ตัวนี้\n-- $1 pill name, $2 low, $3 high, $4 clear ('true'/'false')\n-- clear=true -> เซ็ตทั้งคู่เป็น NULL (กลับไปใช้แค่ช่วงยีสต์)\n-- ถ้าใส่มาสลับ (low > high) ให้สลับกลับให้เอง จะได้ไม่ต้องบ่น\nWITH pill_device AS (\n  SELECT device_id FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\ntarget AS (\n  SELECT b.batch_id FROM batches b\n  JOIN pill_device pd ON pd.device_id = b.pill_device_id\n  WHERE b.status = 'active' LIMIT 1\n),\nupd AS (\n  UPDATE batches b SET\n    beer_band_low_c  = CASE WHEN $4 = 'true' THEN NULL ELSE LEAST(NULLIF($2,'null')::numeric, NULLIF($3,'null')::numeric) END,\n    beer_band_high_c = CASE WHEN $4 = 'true' THEN NULL ELSE GREATEST(NULLIF($2,'null')::numeric, NULLIF($3,'null')::numeric) END\n  WHERE b.batch_id = (SELECT batch_id FROM target)\n  RETURNING b.batch_id, b.beer_name, b.beer_band_low_c, b.beer_band_high_c, b.pill_device_id, b.recipe_id\n),\n-- ล้าง state ที่ค้าง เพื่อให้เกณฑ์ใหม่ประเมินใหม่ตั้งแต่รอบถัดไป ไม่ติด dedupe ของเกณฑ์เดิม\ncleared AS (\n  DELETE FROM temp_alert_state s USING upd u WHERE s.batch_id = u.batch_id RETURNING s.batch_id\n)\nSELECT u.batch_id, u.beer_name, u.beer_band_low_c, u.beer_band_high_c,\n       (SELECT p.temperature_c FROM pill_readings p WHERE p.device_id = u.pill_device_id\n         ORDER BY p.time_utc DESC LIMIT 1) AS pill_temp_c,\n       y.name AS yeast_name, y.min_temp_c AS yeast_min_temp_c, y.max_temp_c AS yeast_max_temp_c\nFROM upd u\nLEFT JOIN recipes rc ON rc.recipe_id = u.recipe_id\nLEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(rc.yeast_name));",
+        "options": {
+          "queryReplacement": "={{$json.pill}}, {{$json.band_low}}, {{$json.band_high}}, {{$json.band_clear}}"
+        },
+        "alwaysOutputData": true
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2900,
+        1400
+      ],
+      "id": "ba9d0000-0000-4000-8000-000000000401",
+      "name": "Set Beer Band",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cmd = $('Parse Interaction Command').first().json;\nconst r = $('Set Beer Band').first().json;\n\nfunction f(v, n) { return v == null ? '-' : Number(v).toFixed(n); }\n\nlet content;\nif (!r || !r.batch_id) {\n  content = '⚠️ ไม่พบ batch ที่ active อยู่สำหรับ Pill: ' + cmd.pill;\n} else if (r.beer_band_low_c == null && r.beer_band_high_c == null) {\n  content = '🧹 ล้างช่วงอุณหภูมิที่ตั้งไว้ของ \"' + r.beer_name + '\" แล้ว'\n    + '\\nจากนี้ Temp Guard จะเตือนเฉพาะตอนหลุดช่วงที่ยีสต์รองรับ'\n    + (r.yeast_min_temp_c != null ? (' (' + f(r.yeast_min_temp_c, 0) + '-' + f(r.yeast_max_temp_c, 0) + '°C)') : '');\n} else {\n  // ช่วงนี้เป็นอุณหภูมิ \"ของเบียร์\" ไม่ใช่ค่าที่ตั้งบนตู้ — ตู้จะต่ำกว่านี้ตามส่วนต่างที่\n  // การหมักคายความร้อน ระบบจะแปลงให้เองเวลาเสนอปรับ target\n  content = '🎯 ตั้งช่วงอุณหภูมิเบียร์ของ \"' + r.beer_name + '\" เป็น '\n    + f(r.beer_band_low_c, 2) + '-' + f(r.beer_band_high_c, 2) + '°C'\n    + '\\nเป็นอุณหภูมิ**ของเบียร์ (Pill)** ไม่ใช่ค่าที่ตั้งบนตู้ — ตู้จะต่ำกว่านี้ตามความร้อนที่การหมักคายออกมา'\n    + '\\nเบียร์ตอนนี้: ' + f(r.pill_temp_c, 2) + '°C'\n    + (r.pill_temp_c != null && Number(r.pill_temp_c) >= Number(r.beer_band_low_c) && Number(r.pill_temp_c) <= Number(r.beer_band_high_c)\n        ? ' ✅ อยู่ในช่วง' : ' ⚠️ อยู่นอกช่วง — Temp Guard จะเตือนภายใน 15 นาที')\n    + (r.yeast_min_temp_c != null\n        ? ('\\nช่วงที่ยีสต์ ' + (r.yeast_name || '-') + ' รองรับ: ' + f(r.yeast_min_temp_c, 0) + '-' + f(r.yeast_max_temp_c, 0) + '°C')\n        : '')\n    + '\\n\\nช่วงนี้ไม่เลื่อนตามเฟสเอง — พอเข้า diacetyl rest หรือ cold crash ต้องสั่ง /ferment_band ใหม่';\n}\n\nreturn [{\n  json: {\n    content,\n    application_id: cmd.application_id,\n    interaction_token: cmd.interaction_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3124,
+        1400
+      ],
+      "id": "ba9d0000-0000-4000-8000-000000000402",
+      "name": "Build Band Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ba9d0000-e5f6-4789-9abc-def012345678",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "band",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2676,
+        1400
+      ],
+      "id": "ba9d0000-0000-4000-8000-000000000403",
+      "name": "Is Band?"
     }
   ],
   "connections": {
@@ -1910,7 +1979,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Is Band?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Recipes List": {
@@ -2002,6 +2077,40 @@
         [
           {
             "node": "Build Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Band?": {
+      "main": [
+        [
+          {
+            "node": "Set Beer Band",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Set Beer Band": {
+      "main": [
+        [
+          {
+            "node": "Build Band Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Band Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
             "type": "main",
             "index": 0
           }

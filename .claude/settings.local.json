@@ -12,7 +12,8 @@
       "Bash(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -T git@github.com)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(ssh ferment-vps \"cd /docker/ferment-agent && docker compose exec -T postgresql psql *)"
     ]
   }
 }
