@@ -371,7 +371,7 @@ Query Parameters: `{{$json.pill}}`
 
 ### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-24 nodes (โครงสร้างหลัง task #59 — เดิมแยก 3 สายขนานจาก `Get Latest Readings` เปลี่ยนเป็นสายเดียวเรียงลำดับ): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get RAPT Token` → `Get Pills To Poll` (Postgres, **ทุก Pill ใน `devices` ไม่ผูกกับ batch** — ดู 8.12) → `Get Pill Telemetry`→`Format Pill Readings`→`Insert Pill Readings` → `Get Controllers To Poll` (executeOnce) → `Get Controller Telemetry`→`Format Controller Readings`→`Insert Controller Readings` → `Get Active Batches` (executeOnce, เฉพาะ `status='active'`) → **`Get Latest Readings`** (อ่าน DB หลัง insert เสร็จแล้ว, กรอง `>= start_date`) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Build Batch Embeds`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
+15 nodes (โครงสร้างหลัง task #65 — การดึง telemetry ย้ายออกไปอยู่ `Telemetry Sync` ข้อ 8.13 workflow นี้เหลือหน้าที่ "วิเคราะห์" อย่างเดียว อ่าน DB ที่มีข้อมูลสดอยู่แล้ว): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → **`Get Latest Readings`** (กรอง `>= start_date` — ดู 8.12) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Build Batch Embeds`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
 
 **รวมข้อความ Discord เหลือทางเดียว (เพิ่ม 18 ส.ค.)**: เดิมมี 3 message แยก (`Send Discord Alert` ตอนเฟสเปลี่ยน, `Send Prep Alert` ตอนใกล้เปลี่ยนเฟส, `Send Routine Update` ทุกรอบ) เนื้อหาซ้ำกันเกือบหมดเพราะ `Send Routine Update` เดิมก็มี reasoning + 🔜 prep guidance ครบอยู่แล้ว — ตัด `Send Discord Alert`/`Send Prep Alert` ออก (โหนดที่มันเคยพ่วงไว้คือ `Update Batch Phase`/`Update Prep Alert State` ยังเก็บไว้เหมือนเดิม แค่ต่อตรงจาก IF โหนดแทน) เหลือ `Send Routine Update` ยิงข้อความเดียวต่อรอบ พร้อมเพิ่มตัวบอกเฟสเปลี่ยน (`🔔 (เปลี่ยนจาก X)`) ต่อท้ายชื่อเฟสแทนที่จะแยกข้อความ
 
@@ -579,6 +579,34 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 
 ---
 
+### 8.13 "Telemetry Sync" — แยกการเก็บข้อมูลออกมาเป็น cron ของตัวเอง ทุก 15 นาที (task #65, 8 ก.ย.)
+
+**อาการ**: ผู้ใช้เทียบแอป RAPT ที่อ่าน Pill ได้ 17.1°C กับที่ AI ตอบมา 19°C
+
+**ตรวจแล้วไม่ใช่ปัญหาหน่วยหรือเซ็นเซอร์** — ค่าใน DB ลงตัวที่ 1/16 องศาพอดีทุกจุด (19.0625 / 19.125 / 19.1875) ซึ่งเป็นความละเอียดจริงของ Pill ส่วน 17.1 ในแอปคือ 17.125 ที่ปัดทศนิยม 1 ตำแหน่ง **สาเหตุคือค่าที่ AI ใช้เก่าไป 2.77 ชั่วโมง**: reading ล่าสุดใน DB คือ 07:52 (จาก cron รอบ 08:00) แต่ตอนถามคือ 10:38 ระหว่างนั้นตู้ (target 15.5°C, ตัวตู้เอง 14.85°C) ดึงอุณหภูมิเบียร์ลงจาก 19.19 มา 17.1 ตามปกติ
+
+**และพบว่า `/ferment_status` ไม่ได้ดึงข้อมูลใหม่ก่อนวิเคราะห์เลย** — ไล่ connections จริงแล้วสาย backfill (`Get RAPT Token (Backfill)` → `Backfill Pill/Controller Telemetry` → …) ห้อยอยู่กับ `Create Batch` คือเป็นของ `/ferment_start` ล้วนๆ (โค้ดอ่าน `$('Create Batch')` กับ `start_date` จากคำสั่ง) ส่วน `/ferment_status` วิ่ง `Is Status?` → `Get Batch For Analysis` ตรงเข้าไปเลย ยืนยันจาก execution 613/614: รัน `/ferment_status` ตอน 09:52 แต่ข้อมูลใหม่สุดใน DB ยังเป็น 07:52 ไม่มี insert อะไรเกิดขึ้น → **`/ferment_status` เก่าได้ถึง 4 ชั่วโมง** ขึ้นกับว่าถามห่างจาก cron รอบล่าสุดแค่ไหน
+
+**แก้โดยแยก "จังหวะ" ของการเก็บข้อมูลออกจากการวิเคราะห์** — ต่อยอดจาก 8.12 ที่แยก "ตัวขับ" ออกจากกันไปแล้ว (device-driven vs batch-driven) เหลือแค่แยกความถี่:
+
+```
+เดิม:  Phase Analysis Cron (4 ชม.) = ดึง telemetry + วิเคราะห์   → ข้อมูลเก่าได้ถึง 4 ชม.
+ใหม่:  Telemetry Sync      (15 นาที) = ดึง telemetry อย่างเดียว
+       Phase Analysis Cron (4 ชม.)   = วิเคราะห์อย่างเดียว        → ข้อมูลเก่าไม่เกิน 15 นาที
+```
+
+**`Telemetry Sync` (ไฟล์ใหม่, 10 nodes)** — ยกสาย ingestion ทั้งเส้นมาจาก `Phase Analysis Cron` แบบ verbatim: `Schedule Trigger` (cron `*/15 * * * *`) → `Get RAPT Token` → `Get Pills To Poll` → `Get Pill Telemetry` → `Format Pill Readings` → `Insert Pill Readings` → `Get Controllers To Poll` → `Get Controller Telemetry` → `Format Controller Readings` → `Insert Controller Readings`
+
+**`Phase Analysis Cron` เหลือ 15 nodes** — ตัด 9 node ของ ingestion ออก (รวม `Get RAPT Token` ที่ไม่ต้องใช้แล้ว) เหลือ `Schedule Trigger` → `Get Active Batches` → `Get Latest Readings` → … และเอา `executeOnce` ของ `Get Active Batches` ออกเพราะไม่ได้ตามหลัง INSERT แล้ว (รับ item เดียวจาก trigger)
+
+**ทำไมไม่ทำเป็น sub-workflow ให้ cron เรียก**: จะได้ความสดเท่ากันแต่ต้องผูก `workflowId` ข้ามไฟล์ ซึ่งเคยพังมาแล้วตอน `Phase Analysis Engine` (reimport ทับค่าที่แก้ไว้แค่ในหน้า editor) และต้อง import 2 รอบแบบมีสถานะกลางที่พังอยู่ — เลือกให้ `Telemetry Sync` เดินด้วยตัวเองแทน ไม่มีใครอ้าง id มัน import ครั้งเดียวจบ
+
+**ผลข้างเคียงที่ยอมรับ**: `Phase Analysis Cron` ไม่ได้ดึงข้อมูลเองแล้ว จึงอ่านข้อมูลที่เก่าได้ถึง 15 นาที (จาก 0) — ยอมรับได้เพราะ Pill เองส่งข้อมูลทุก ~15 นาทีอยู่แล้ว ต่างจากบั๊ก #59 ที่เก่าถึง 4 ชม. และถ้า `Telemetry Sync` พัง/ถูกปิด จะเห็นจาก `Check Sensor Freshness` (แจ้ง Discord) กับคำเตือน "Pill เงียบมา X ชม." ใน prompt/embed ที่มีอยู่แล้ว
+
+**ยังไม่ได้แก้ในรอบนี้**: `/ferment_status` ยังไม่ดึงข้อมูลสดเอง แต่ปัญหาเบาลงจาก "เก่าได้ถึง 4 ชม." เหลือ "เก่าไม่เกิน 15 นาที" ถ้าต้องการสดจริงๆ ต้องเพิ่มสายดึง telemetry ในสาย status ของ `Discord Interactions Webhook` แยกอีกงาน
+
+---
+
 ### 8.12 แก้บั๊กร้ายแรง "วิเคราะห์ข้อมูล batch เก่า" + แยกการเก็บข้อมูลออกจากการวิเคราะห์ (task #64, 8 ก.ย.)
 
 **อาการ**: `/ferment_status` ตอบ `cold_crash` ให้ batch ที่เพิ่งเริ่มหมักมา 11 ชั่วโมง (batch 4 Hazy DIPA, `current_phase` ใน DB เป็น `lag`)
@@ -722,6 +750,7 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 - #63 เปลี่ยนข้อความ Discord เป็น embed (สร้างที่ `Phase Analysis Engine` ที่เดียว ใช้ร่วมกับ `/ferment_status`) — แก้ปัญหาแยกไม่ออกว่าข้อมูล batch ไหนจบตรงไหนตอนหมักหลายตัวพร้อมกัน และยุบจากสูงสุด 12 ข้อความ/รอบ เหลือ 1 ข้อความต่อ batch พร้อมสีแถบสื่อเฟส (แดง = Pill ตาย) — ✅ เสร็จ ทดสอบ harness ทั้ง pipeline + fallback 3 ทาง รอ reimport `Phase Analysis Engine` + `Phase Analysis Cron` + `Discord Interactions Webhook` — 22 ส.ค.
 - #60 (ค้าง) telemetry ดึงประวัติทั้ง batch ใหม่ทุกรอบ — `$json.pill_time_utc`/`controller_time_utc` เป็น undefined เสมอเพราะ `Get Latest Readings` ไม่ return field นี้ ทำให้ adaptive fetch ไม่ทำงานจริง fallback ไป `start_date` ตลอด (พบ 1,064 จุด/รอบ) ยังทำงานถูกเพราะ insert idempotent แต่เปลือง API/DB และแย่ลงตามอายุ batch — ✅ เสร็จ แก้ไปพร้อม #64 (`Get Pills To Poll` คืน `fetch_from` ต่อ device แทน) พบ 19 ส.ค. แก้ 8 ก.ย.
 - #64 แก้บั๊กร้ายแรง: วิเคราะห์ข้อมูล batch เก่าปนกับ batch ปัจจุบัน (`pill_series`/`controller_series` กรองแค่ `device_id` ไม่กรอง `start_date` — Pill ตัวเดียวใช้ซ้ำข้าม batch ได้ ส่งไป 1,091 จุดทั้งที่เป็นของ batch ปัจจุบันแค่ 23 จุด ทำให้ `/ferment_status` ตอบ `cold_crash` ให้ batch ที่หมักมา 11 ชม.) + แยกการเก็บ telemetry ออกจาก batch ให้เก็บต่อเนื่องแม้หมักจบ (เดิม `/ferment_stop` แล้วหยุดเก็บทันที ช่วง 26/08-07/09 ได้ 0 จุด) + เพิ่ม `end_date` ปิดขอบ batch พร้อม backfill — ✅ เสร็จ ทดสอบ query จริงบน VPS ทุกตัว + harness fan-out รอ reimport `Phase Analysis Cron` + `Discord Interactions Webhook` — 8 ก.ย.
+- #65 แยก `Telemetry Sync` (ดึง telemetry ทุก 15 นาที) ออกจาก `Phase Analysis Cron` (วิเคราะห์ทุก 4 ชม.) — แก้อาการ "แอป RAPT อ่าน 17.1°C แต่ AI ตอบ 19°C" ซึ่งเกิดจากข้อมูลใน DB เก่า 2.77 ชม. และพบระหว่างทางว่า `/ferment_status` ไม่ได้ดึงข้อมูลใหม่ก่อนวิเคราะห์เลย (สาย backfill ห้อยอยู่กับ `Create Batch` เป็นของ `/ferment_start` ล้วนๆ) ตอนนี้ข้อมูลเก่าไม่เกิน 15 นาทีทั้ง cron และ `/ferment_status` โดยไม่เพิ่มค่า AI — ✅ เสร็จ รอ **import `Telemetry Sync` (ไฟล์ใหม่)** + reimport `Phase Analysis Cron` แล้วเติม id ลง `workflows/.allowed-ids` — 8 ก.ย.
 
 ---
 

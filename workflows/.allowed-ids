@@ -9,11 +9,14 @@ dfU7lACidEI47NeF   # Sync Devices (task #30)
 lH71jKXSOLtyevh6   # Phase Analysis Cron (task #32)
 DiabUYq10uXnbYgy   # Discord Interactions Webhook (task #35)
 Lm8O1NyDrB3gnwXf   # Phase Analysis Backtest (task #41) — เครื่องมือ backtest ทดสอบว่า cron จะวิเคราะห์อะไรแต่ละวันจำลอง ไม่ active/ไม่มี trigger จริง รันมือผ่าน Manual Trigger เท่านั้น (id ดึงจาก n8n DB จริง 19 ส.ค.)
-# TODO: เติม id ตรงนี้หลัง import "Error Alert" (task #53) ครั้งแรก — workflow ดัก execution ที่
-# fail จากทุก workflow แล้วแจ้ง Discord — import แล้วต้องไปตั้ง Settings > Error Workflow ของ
-# Phase Analysis Cron / Discord Interactions Webhook / Sync Devices ให้ชี้มาที่ workflow นี้ด้วย
-# (ตั้งใน UI ได้ แต่ต้องบันทึก id ลงที่นี่ + แจ้งให้เพิ่ม settings.errorWorkflow ในไฟล์ JSON ด้วย
-# กัน reimport ทับ — ดูบทเรียน REPLACE_WITH_SHARED_WORKFLOW_ID)
+XwfLoJXuD9Fk5nvn   # Error Alert (task #53) — ดัก execution ที่ fail จากทุก workflow แล้วแจ้ง Discord
+                   # (id ดึงจาก n8n DB จริง 8 ก.ย. ตอนนี้ import แล้วและ active อยู่) ยังต้องเช็คว่า
+                   # Settings > Error Workflow ของ Phase Analysis Cron / Telemetry Sync /
+                   # Discord Interactions Webhook / Sync Devices ชี้มาที่ workflow นี้ครบทุกตัว
+# TODO: เติม id ตรงนี้หลัง import "Telemetry Sync" (task #65) ครั้งแรก — workflow ดึง telemetry
+# ของทุก Pill/ตู้ควบคุมทุก 15 นาที แยกออกมาจาก Phase Analysis Cron เพื่อให้เก็บข้อมูลต่อเนื่อง
+# ไม่ผูกกับรอบวิเคราะห์ 4 ชม. (ไม่มี workflow อื่นเรียกมันผ่าน id จึงไม่ต้องแก้ไฟล์ JSON ตัวอื่นตาม
+# แค่บันทึก id ไว้ให้ backup-workflows.sh เก็บไฟล์นี้ด้วย)
 wdd07vd16VnMw2de   # Phase Analysis Engine (task #43) — sub-workflow กลาง (Build AI Prompt →
                    # Call Claude → Parse AI Response) เรียกจาก Phase Analysis Cron/Backtest
                    # ผ่าน node "Call Phase Analysis" — id นี้ hardcode ไว้ใน workflowId.value

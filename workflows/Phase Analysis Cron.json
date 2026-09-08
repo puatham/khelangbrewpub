@@ -29,43 +29,6 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://id.rapt.io/connect/token",
-        "sendBody": true,
-        "contentType": "form-urlencoded",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "client_id",
-              "value": "rapt-user"
-            },
-            {
-              "name": "grant_type",
-              "value": "password"
-            },
-            {
-              "name": "username",
-              "value": "={{$env.RAPT_USERNAME}}"
-            },
-            {
-              "name": "password",
-              "value": "={{$env.RAPT_API_SECRET}}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        17888,
-        6912
-      ],
-      "id": "a6bea693-ffe5-4ea6-8a59-c8d888f784f2",
-      "name": "Get RAPT Token"
-    },
-    {
-      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT\n  b.batch_id, b.beer_name, b.current_phase, b.start_date, b.prep_alerted_for_phase, b.recipe_id,\n  dp.device_id AS pill_id, dp.device_name AS pill_name,\n  dc.device_id AS controller_id, dc.device_name AS controller_name\nFROM batches b\nJOIN devices dp ON dp.device_id = b.pill_device_id\nJOIN devices dc ON dc.device_id = b.temp_controller_device_id\nWHERE b.status = 'active';",
         "options": {}
@@ -83,162 +46,7 @@
           "id": "t6ZZv3ZEHRRZX5Q2",
           "name": "Postgres account"
         }
-      },
-      "executeOnce": true
-    },
-    {
-      "parameters": {
-        "url": "https://api.rapt.io/api/Hydrometers/GetTelemetry",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "hydrometerId",
-              "value": "={{ $json.pill_id }}"
-            },
-            {
-              "name": "startDate",
-              "value": "={{ DateTime.fromISO($json.fetch_from).toUTC().toISO() }}"
-            },
-            {
-              "name": "endDate",
-              "value": "={{ $now.toUTC().toISO() }}"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Get RAPT Token').first().json.access_token }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        18336,
-        6592
-      ],
-      "id": "3919ea7b-fbfd-46e0-a1d2-c4a346a34a55",
-      "name": "Get Pill Telemetry"
-    },
-    {
-      "parameters": {
-        "url": "https://api.rapt.io/api/TemperatureControllers/GetTelemetry",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "temperatureControllerId",
-              "value": "={{ $json.controller_id }}"
-            },
-            {
-              "name": "startDate",
-              "value": "={{ DateTime.fromISO($json.fetch_from).toUTC().toISO() }}"
-            },
-            {
-              "name": "endDate",
-              "value": "={{ $now.toUTC().toISO() }}"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $('Get RAPT Token').first().json.access_token }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        18336,
-        6800
-      ],
-      "id": "fd0799bf-eb99-4ffa-93b8-e1cb8ec1cdae",
-      "name": "Get Controller Telemetry"
-    },
-    {
-      "parameters": {
-        "jsCode": "const inItems = $input.all();\n// รองรับทั้ง 2 แบบ: (a) 1 item ที่ json เป็น array ทั้งก้อน (b) แยกเป็นคนละ item ต่อ reading\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 device) idx จึงเกิน\n  // จำนวน device เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา device ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const src = $('Get Pills To Poll').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: src.pill_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        gravity_sg: t.gravity != null ? Number((t.gravity / 1000).toFixed(5)) : null,\n        gravity_velocity_sg_per_day: t.gravityVelocity,\n        battery_percent: t.battery,\n        rssi_dbm: t.rssi,\n        paired_temp_controller: src.paired_controller_name\n      }\n    });\n  }\n});\nreturn rows;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        18560,
-        6592
-      ],
-      "id": "9f61c76b-d587-4989-85c7-67fe839fd16a",
-      "name": "Format Pill Readings"
-    },
-    {
-      "parameters": {
-        "jsCode": "const inItems = $input.all();\nconst rows = [];\ninItems.forEach((it, idx) => {\n  // ต้องใช้ itemMatching ที่นี่ ห้ามใช้ index ตรงๆ — HTTP telemetry node กระจาย array\n  // response ออกเป็นหลายร้อย item (1 item ต่อ 1 reading ไม่ใช่ต่อ 1 device) idx จึงเกิน\n  // จำนวน device เสมอ itemMatching เป็นตัว map แต่ละ reading กลับไปหา device ต้นทางที่ถูกตัว\n  // (เคยพลาดใช้ .all()[idx] แล้วพังทันทีด้วย \"Cannot read properties of undefined\" 19 ส.ค.)\n  const src = $('Get Controllers To Poll').itemMatching(idx).json;\n  const val = it.json;\n  const readings = Array.isArray(val) ? val : [val];\n  for (const t of readings) {\n    if (!t || !t.createdOn) continue;\n    rows.push({\n      json: {\n        device_id: src.controller_id,\n        time_utc: t.createdOn,\n        temperature_c: t.temperature,\n        target_temperature_c: t.targetTemperature,\n        rssi_dbm: t.rssi\n      }\n    });\n  }\n});\nreturn rows;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        18560,
-        6800
-      ],
-      "id": "855d64d9-0ba5-49a4-9d37-c8852aedefda",
-      "name": "Format Controller Readings"
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO pill_readings (device_id, time_utc, temperature_c, gravity_sg, gravity_velocity_sg_per_day, battery_percent, rssi_dbm, paired_temp_controller)\nVALUES ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
-        "options": {
-          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.gravity_sg}}, {{$json.gravity_velocity_sg_per_day}}, {{$json.battery_percent}}, {{$json.rssi_dbm}}, {{$json.paired_temp_controller}}"
-        }
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        18784,
-        6592
-      ],
-      "id": "a9480ad5-869f-48b7-aefa-5a770ee1ed38",
-      "name": "Insert Pill Readings",
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      },
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO temp_controller_readings (device_id, time_utc, temperature_c, target_temperature_c, rssi_dbm)\nVALUES ($1, $2, $3, $4, $5)\nON CONFLICT (device_id, time_utc) DO NOTHING;",
-        "options": {
-          "queryReplacement": "={{$json.device_id}}, {{$json.time_utc}}, {{$json.temperature_c}}, {{$json.target_temperature_c}}, {{$json.rssi_dbm}}"
-        }
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        18784,
-        6800
-      ],
-      "id": "65d433f5-2cfc-440a-926a-248ced2f3ace",
-      "name": "Insert Controller Readings",
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      },
-      "alwaysOutputData": true
+      }
     },
     {
       "parameters": {
@@ -554,50 +362,6 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- ดึงรายชื่อ Pill ทุกตัวเพื่อ poll telemetry ต่อเนื่อง **ไม่ผูกกับ batch** — ระบบจึงเก็บ\n-- ข้อมูลต่อแม้หมักจบแล้ว (ดู cold crash ต่อ/วันบรรจุได้) เดิม Get Active Batches เป็นตัวขับ\n-- ทั้งสาย พอ /ferment_stop ปุ๊บก็หยุดเก็บทันที — เจอจริง 08/09: ช่วง 26/08-07/09 ที่ไม่มี\n-- batch active ได้ 0 จุดทั้ง Pill01 และ Pill02\n-- พื้นของ fetch_from: device ที่เลิกใช้แล้ว (เช่น Pill02 แบตหมดตั้งแต่ 25/08) จะค้างอยู่ที่\n-- reading สุดท้ายตลอดไป ถ้าไม่มีพื้นจะดึงย้อนหลังเป็นเดือนทุกรอบ แล้ว insert ทับของเดิม\n-- หลักร้อยแถวทุก 4 ชม.โดยไม่ได้อะไรเลย — จึงกันไม่ให้ย้อนเกิน 7 วัน **ยกเว้น** device ที่\n-- กำลังอยู่ใน batch ที่ active ซึ่งใช้ start_date ของ batch เป็นพื้นแทน เพื่อไม่ให้เกิดรูโหว่\n-- ถ้าเซ็นเซอร์เงียบไปนานแล้วกลับมาส่งข้อมูลย้อนหลัง\n-- fetch_from = reading ล่าสุดของ device ถอยหลัง 3 ชม.เผื่อ overlap (INSERT เป็น ON CONFLICT\n-- DO NOTHING กันซ้ำอยู่แล้ว) ถ้ายังไม่เคยมี reading เลยถอยไป 7 วัน — ค่านี้ทำให้ adaptive\n-- fetch ทำงานจริงเป็นครั้งแรก (เดิม $json.pill_time_utc เป็น undefined เสมอเพราะ Get Latest\n-- Readings ไม่เคย return field นี้ จึง fallback ไป start_date ทุกรอบ ดึงซ้ำ 1,068 จุด/รอบ)\nSELECT d.device_id AS pill_id,\n       d.device_name AS pill_name,\n       to_char(GREATEST(\n                 COALESCE(MAX(p.time_utc) - INTERVAL '3 hours', now() - INTERVAL '7 days'),\n                 COALESCE(MIN(ab.start_date), now() - INTERVAL '7 days'))\n               AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS fetch_from,\n       (SELECT x.device_name FROM devices x\n         WHERE x.device_id::text = d.raw_data->>'pairedDeviceId') AS paired_controller_name\nFROM devices d\nLEFT JOIN pill_readings p ON p.device_id = d.device_id\nLEFT JOIN batches ab ON ab.pill_device_id = d.device_id AND ab.status = 'active'\nWHERE d.device_type = 'pill'\nGROUP BY d.device_id, d.device_name, d.raw_data\nORDER BY d.device_name;",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        18096,
-        6592
-      ],
-      "id": "b1a2c3d4-0000-4000-8000-000000000101",
-      "name": "Get Pills To Poll",
-      "executeOnce": true,
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- คู่กับ Get Pills To Poll — poll ตู้ควบคุมทุกตัวต่อเนื่องไม่ผูกกับ batch เช่นกัน\n-- ต้องเปิด \"Execute Once\" เพราะ node นี้รับ item ต่อจาก Insert Pill Readings ซึ่งพ่นออกมา\n-- หลักร้อย item (1 ต่อ 1 reading ที่ insert) ถ้าไม่เปิดจะรัน query ซ้ำหลักร้อยรอบ\n-- พื้นของ fetch_from: device ที่เลิกใช้แล้ว (เช่น Pill02 แบตหมดตั้งแต่ 25/08) จะค้างอยู่ที่\n-- reading สุดท้ายตลอดไป ถ้าไม่มีพื้นจะดึงย้อนหลังเป็นเดือนทุกรอบ แล้ว insert ทับของเดิม\n-- หลักร้อยแถวทุก 4 ชม.โดยไม่ได้อะไรเลย — จึงกันไม่ให้ย้อนเกิน 7 วัน **ยกเว้น** device ที่\n-- กำลังอยู่ใน batch ที่ active ซึ่งใช้ start_date ของ batch เป็นพื้นแทน เพื่อไม่ให้เกิดรูโหว่\n-- ถ้าเซ็นเซอร์เงียบไปนานแล้วกลับมาส่งข้อมูลย้อนหลัง\n-- (บั๊กแบบเดียวกับที่เคยทำให้ Check Sensor Freshness ยิง alert ซ้ำ 4 รอบ)\nSELECT d.device_id AS controller_id,\n       d.device_name AS controller_name,\n       to_char(GREATEST(\n                 COALESCE(MAX(c.time_utc) - INTERVAL '3 hours', now() - INTERVAL '7 days'),\n                 COALESCE(MIN(ab.start_date), now() - INTERVAL '7 days'))\n               AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS fetch_from\nFROM devices d\nLEFT JOIN temp_controller_readings c ON c.device_id = d.device_id\nLEFT JOIN batches ab ON ab.temp_controller_device_id = d.device_id AND ab.status = 'active'\nWHERE d.device_type = 'temp_controller'\nGROUP BY d.device_id, d.device_name\nORDER BY d.device_name;",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        18096,
-        6800
-      ],
-      "id": "b1a2c3d4-0000-4000-8000-000000000102",
-      "name": "Get Controllers To Poll",
-      "executeOnce": true,
-      "credentials": {
-        "postgres": {
-          "id": "t6ZZv3ZEHRRZX5Q2",
-          "name": "Postgres account"
-        }
-      }
     }
   ],
   "connections": {
@@ -605,18 +369,7 @@
       "main": [
         [
           {
-            "node": "Get RAPT Token",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get RAPT Token": {
-      "main": [
-        [
-          {
-            "node": "Get Pills To Poll",
+            "node": "Get Active Batches",
             "type": "main",
             "index": 0
           }
@@ -628,50 +381,6 @@
         [
           {
             "node": "Get Latest Readings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Pill Telemetry": {
-      "main": [
-        [
-          {
-            "node": "Format Pill Readings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Pill Readings": {
-      "main": [
-        [
-          {
-            "node": "Insert Pill Readings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Controller Telemetry": {
-      "main": [
-        [
-          {
-            "node": "Format Controller Readings",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Controller Readings": {
-      "main": [
-        [
-          {
-            "node": "Insert Controller Readings",
             "type": "main",
             "index": 0
           }
@@ -775,55 +484,11 @@
         ]
       ]
     },
-    "Insert Pill Readings": {
-      "main": [
-        [
-          {
-            "node": "Get Controllers To Poll",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Insert Controller Readings": {
-      "main": [
-        [
-          {
-            "node": "Get Active Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Build Batch Embeds": {
       "main": [
         [
           {
             "node": "Send Routine Update",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Pills To Poll": {
-      "main": [
-        [
-          {
-            "node": "Get Pill Telemetry",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Controllers To Poll": {
-      "main": [
-        [
-          {
-            "node": "Get Controller Telemetry",
             "type": "main",
             "index": 0
           }
