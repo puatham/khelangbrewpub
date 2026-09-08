@@ -579,6 +579,52 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 
 ---
 
+### 8.14 `/ferment_status` ขาด CTE ครึ่งหนึ่ง + `fallback_gap` ประมาณอุณหภูมิเพี้ยน (task #66, 8 ก.ย.)
+
+**เจอจาก**: Pill01 เงียบไป 3.6 ชม. (RSSI -91 dBm ตู้เหล็กบังสัญญาณ แบตยัง 100%) แต่ข้อความ `/ferment_status` **ไม่เตือนอะไรเลย** และ prep_actions เขียนว่า "เตรียมแผน dry hop ช่วง biotransformation **หากมีในสูตร**" ทั้งที่ batch นี้ผูก recipe ไว้แล้ว
+
+**สาเหตุ**: ตอนย้าย `/ferment_status` ไปใช้ `Phase Analysis Engine` ร่วมกับ cron (ข้อ 8.5) ย้ายแต่ตัวเรียก **ไม่ได้ยกระดับ query ให้ป้อนข้อมูลครบตามที่ Engine คาดหวัง** — `Get Batch For Analysis` มีแค่ 3 series ขาด CTE ไป 7 ตัวที่ `Get Latest Readings` มี:
+
+| CTE | cron | `/ferment_status` (เดิม) |
+|---|---|---|
+| `stale_calc` เตือน Pill เงียบ | ✅ | ❌ |
+| `last_battery` | ✅ | ❌ |
+| `fallback_gap` ประมาณอุณหภูมิตอน Pill ตาย | ✅ | ❌ |
+| `last_change`/`gap_window`/`gap_calc` แนะนำ target | ✅ | ❌ |
+| `recipe_info` ยีสต์/แผนอุณหภูมิ/dry hop | ✅ | ❌ |
+
+`/ferment_status` จึงให้ผลวิเคราะห์ด้อยกว่า cron มาตลอดโดยไม่มีใครสังเกต **แก้โดยยก CTE ทั้ง 7 ตัวมาแบบคำต่อคำ** เปลี่ยนแค่ที่มาของพารามิเตอร์ (cron รับ `$1/$2/$3/$9` จาก `Get Active Batches` ส่วนไฟล์นี้ derive จาก `batch_info` ที่มีอยู่แล้ว — เพิ่ม `b.recipe_id` เข้า `batch_info` ด้วย) prompt โตจาก ~7,700 เป็น 10,889 ตัวอักษร
+
+#### บั๊กที่การแก้นี้เปิดโปงออกมา: `fallback_gap` ให้ค่าเพี้ยน 3-4°C
+
+พอ `/ferment_status` มี `fallback_gap` แล้ว มันประมาณอุณหภูมิเบียร์ออกมา **19.46°C** ทั้งที่ค่าจริงล่าสุดคือ **16.50°C** และยังลงต่อ
+
+ตัวกรอง "เบียร์นิ่งแล้ว" เดิมใช้ `|Δ Pill| < 0.15` ต่อจุด ซึ่งหลวมเกินไป — 22 จาก 23 จุดที่ผ่านเกณฑ์เป็นช่วงที่ Pill **ค้างอยู่ยอดกราฟ** 18-19.25°C ขณะตู้ยังไล่ลงไม่ถึงเป้า:
+
+```
+เวลา     pill    ตู้     gap    Δpill
+05:21   19.06  14.39   4.67   0.000   ← Δ=0 แต่ตู้อยู่ 14.39 ทั้งที่ target 15.5
+09:07   19.25  15.11   4.14   0.000
+11:56   16.50  14.18   2.32  -0.063   ← จุดเดียวที่สะท้อนของจริง
+```
+
+Δ Pill เป็น 0 เพราะเบียร์พักที่ยอด ไม่ใช่เพราะเข้าสมดุลกับตู้
+
+**แก้โดยเพิ่มเงื่อนไข `abs(c.temp - c.target) <= 0.3`** — gap มีความหมายเฉพาะตอนตู้ไล่ถึง target ได้จริงแล้ว ทดสอบกับ 2 เคส:
+
+| | เกณฑ์เดิม | เกณฑ์ใหม่ |
+|---|---|---|
+| batch 2 (เคสที่เคยยืนยันว่าแม่น 19 ส.ค.) | 163 จุด gap 1.79 | **142 จุด gap 1.75 SD 0.24** ✅ รอด |
+| batch 4 (8 ก.ย.) | 24 จุด gap 4.36 ❌ | **0 จุด** ✅ ตัดทิ้งถูก |
+
+0 จุด → ต่ำกว่าขั้นต่ำ 3 จุด → ระบบตอบ "ประมาณอุณหภูมิเบียร์จากตู้ควบคุมไม่ได้" แทนที่จะโชว์เลขผิด — แก้ทั้ง 3 ไฟล์ที่ `fallback_gap` ถูกก๊อปไว้ (`Phase Analysis Cron`, `Discord Interactions Webhook`, `Phase Analysis Backtest`)
+
+**ทดสอบกับ DB จริง**: ทั้ง `/ferment_status` และ cron คืน `fallback_gap_points = 0` แล้ว, `pill_stale_hours = 3.78` เข้าเกณฑ์เตือน, recipe/ยีสต์/dry hop เข้า prompt ครบ, Backtest ยังรันได้และเคสเก่ายังได้ 103 จุด gap 1.83
+
+**ยังไม่ได้ทำ**: ข้อความ `/ferment_status` ที่มีคำแนะนำ target จะไม่มีปุ่มกดปรับให้ (ปุ่มมีเฉพาะข้อความจาก cron — `custom_id` `settemp|...`)
+
+---
+
 ### 8.13 "Telemetry Sync" — แยกการเก็บข้อมูลออกมาเป็น cron ของตัวเอง ทุก 15 นาที (task #65, 8 ก.ย.)
 
 **อาการ**: ผู้ใช้เทียบแอป RAPT ที่อ่าน Pill ได้ 17.1°C กับที่ AI ตอบมา 19°C
@@ -751,6 +797,8 @@ array เต็ม (`pillSeries`/`controllerSeries`) ที่ใช้คำน
 - #60 (ค้าง) telemetry ดึงประวัติทั้ง batch ใหม่ทุกรอบ — `$json.pill_time_utc`/`controller_time_utc` เป็น undefined เสมอเพราะ `Get Latest Readings` ไม่ return field นี้ ทำให้ adaptive fetch ไม่ทำงานจริง fallback ไป `start_date` ตลอด (พบ 1,064 จุด/รอบ) ยังทำงานถูกเพราะ insert idempotent แต่เปลือง API/DB และแย่ลงตามอายุ batch — ✅ เสร็จ แก้ไปพร้อม #64 (`Get Pills To Poll` คืน `fetch_from` ต่อ device แทน) พบ 19 ส.ค. แก้ 8 ก.ย.
 - #64 แก้บั๊กร้ายแรง: วิเคราะห์ข้อมูล batch เก่าปนกับ batch ปัจจุบัน (`pill_series`/`controller_series` กรองแค่ `device_id` ไม่กรอง `start_date` — Pill ตัวเดียวใช้ซ้ำข้าม batch ได้ ส่งไป 1,091 จุดทั้งที่เป็นของ batch ปัจจุบันแค่ 23 จุด ทำให้ `/ferment_status` ตอบ `cold_crash` ให้ batch ที่หมักมา 11 ชม.) + แยกการเก็บ telemetry ออกจาก batch ให้เก็บต่อเนื่องแม้หมักจบ (เดิม `/ferment_stop` แล้วหยุดเก็บทันที ช่วง 26/08-07/09 ได้ 0 จุด) + เพิ่ม `end_date` ปิดขอบ batch พร้อม backfill — ✅ เสร็จ ทดสอบ query จริงบน VPS ทุกตัว + harness fan-out รอ reimport `Phase Analysis Cron` + `Discord Interactions Webhook` — 8 ก.ย.
 - #65 แยก `Telemetry Sync` (ดึง telemetry ทุก 15 นาที) ออกจาก `Phase Analysis Cron` (วิเคราะห์ทุก 4 ชม.) — แก้อาการ "แอป RAPT อ่าน 17.1°C แต่ AI ตอบ 19°C" ซึ่งเกิดจากข้อมูลใน DB เก่า 2.77 ชม. และพบระหว่างทางว่า `/ferment_status` ไม่ได้ดึงข้อมูลใหม่ก่อนวิเคราะห์เลย (สาย backfill ห้อยอยู่กับ `Create Batch` เป็นของ `/ferment_start` ล้วนๆ) ตอนนี้ข้อมูลเก่าไม่เกิน 15 นาทีทั้ง cron และ `/ferment_status` โดยไม่เพิ่มค่า AI — ✅ เสร็จ รอ **import `Telemetry Sync` (ไฟล์ใหม่)** + reimport `Phase Analysis Cron` แล้วเติม id ลง `workflows/.allowed-ids` — 8 ก.ย.
+- #66 `/ferment_status` ขาด CTE ไป 7 ตัวตั้งแต่ย้ายมาใช้ `Phase Analysis Engine` ร่วมกัน (ไม่เตือน Pill เงียบ ไม่รู้จักสูตร/ยีสต์/dry hop แนะนำ target ไม่ได้) + แก้ `fallback_gap` ที่ประมาณอุณหภูมิเบียร์เพี้ยน 3-4°C เพราะเกณฑ์ "เบียร์นิ่ง" หลวมเกินไป เพิ่มเงื่อนไขว่าตู้ต้องไล่ถึง target จริงแล้ว — ✅ เสร็จ ทดสอบกับ DB จริงทั้ง 3 query รอ **publish** `Discord Interactions Webhook` + `Phase Analysis Cron` + reimport `Phase Analysis Backtest` — 8 ก.ย.
+- ⚠️ **n8n เวอร์ชันนี้แยก draft กับ published** — import ไฟล์อัปเดตแค่ draft, trigger ยังรัน published เวอร์ชันเก่าจนกว่าจะกด Publish (หรือ Deactivate → Activate) เจอจริง 8 ก.ย.: import `Phase Analysis Cron` 3 รอบแล้ว cron 12:00 ยังรันเวอร์ชัน 22 ส.ค. ตอบ `cold_crash` ผิด เช็คได้จาก `workflow_entity.versionId` เทียบ `activeVersionId` และอ่าน node ที่รันจริงจาก `workflow_history` ไม่ใช่ `workflow_entity.nodes`
 
 ---
 
