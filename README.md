@@ -371,7 +371,7 @@ Query Parameters: `{{$json.pill}}`
 
 ### 8.3 "Cron วิเคราะห์เฟส" — ✅ เสร็จ ทดสอบผ่าน (task #32, 15 ส.ค.)
 
-15 nodes (โครงสร้างหลัง task #65 — การดึง telemetry ย้ายออกไปอยู่ `Telemetry Sync` ข้อ 8.13 workflow นี้เหลือหน้าที่ "วิเคราะห์" อย่างเดียว อ่าน DB ที่มีข้อมูลสดอยู่แล้ว): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบ 08:00/12:00/16:00/20:00 เวลาไทย, ปรับจากทุก 30 นาทีเดิม 17 ส.ค. เพื่อลดความถี่การแจ้งเตือน) → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → **`Get Latest Readings`** (กรอง `>= start_date` — ดู 8.12) → แยก 2 สาย: (1) `Add Analysis Time`→`Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Build Batch Embeds`→`Send Routine Update` (2) `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` (ข้อ 8.8)
+12 nodes (โครงสร้างหลัง task #69/#70 — การดึง telemetry ย้ายออกไปอยู่ `Telemetry Sync` ข้อ 8.13, สาย `Check Sensor Freshness`→`Build Sensor Alert`→`Send Sensor Alert` ถูกถอดออกแล้วโดยมี `sensor_stale` ใน Temp Guard ทำหน้าที่แทน workflow นี้จึงเหลือหน้าที่ "วิเคราะห์" อย่างเดียว): `Schedule Trigger` (cron `0 8,12,16,20 * * *` — วันละ 4 รอบเวลาไทย) → `Get Active Batches` (Postgres, เฉพาะ `status='active'`) → **`Get Latest Readings`** (ตอนนี้เหลือ `SELECT * FROM batch_snapshot($1::int);` บรรทัดเดียว — ตรรกะ 130 บรรทัดย้ายไปอยู่ใน function กลาง ดูข้อ 8.17) → `Add Analysis Time` → `Call Phase Analysis` (sub-workflow ข้อ 8.7) → แยก 4 สายขนาน: `Insert Phase Log`, `Phase Changed?`(IF, true→`Update Batch Phase`), `Approaching Transition?`(IF, true→`Update Prep Alert State`), `Build Batch Embeds`→`Send Routine Update`
 
 **รวมข้อความ Discord เหลือทางเดียว (เพิ่ม 18 ส.ค.)**: เดิมมี 3 message แยก (`Send Discord Alert` ตอนเฟสเปลี่ยน, `Send Prep Alert` ตอนใกล้เปลี่ยนเฟส, `Send Routine Update` ทุกรอบ) เนื้อหาซ้ำกันเกือบหมดเพราะ `Send Routine Update` เดิมก็มี reasoning + 🔜 prep guidance ครบอยู่แล้ว — ตัด `Send Discord Alert`/`Send Prep Alert` ออก (โหนดที่มันเคยพ่วงไว้คือ `Update Batch Phase`/`Update Prep Alert State` ยังเก็บไว้เหมือนเดิม แค่ต่อตรงจาก IF โหนดแทน) เหลือ `Send Routine Update` ยิงข้อความเดียวต่อรอบ พร้อมเพิ่มตัวบอกเฟสเปลี่ยน (`🔔 (เปลี่ยนจาก X)`) ต่อท้ายชื่อเฟสแทนที่จะแยกข้อความ
 
@@ -839,7 +839,7 @@ brewmaster ตอบเป็น **อุณหภูมิเบียร์ (P
 
 **ทำไมไม่ทำเป็น sub-workflow ให้ cron เรียก**: จะได้ความสดเท่ากันแต่ต้องผูก `workflowId` ข้ามไฟล์ ซึ่งเคยพังมาแล้วตอน `Phase Analysis Engine` (reimport ทับค่าที่แก้ไว้แค่ในหน้า editor) และต้อง import 2 รอบแบบมีสถานะกลางที่พังอยู่ — เลือกให้ `Telemetry Sync` เดินด้วยตัวเองแทน ไม่มีใครอ้าง id มัน import ครั้งเดียวจบ
 
-**ผลข้างเคียงที่ยอมรับ**: `Phase Analysis Cron` ไม่ได้ดึงข้อมูลเองแล้ว จึงอ่านข้อมูลที่เก่าได้ถึง 15 นาที (จาก 0) — ยอมรับได้เพราะ Pill เองส่งข้อมูลทุก ~15 นาทีอยู่แล้ว ต่างจากบั๊ก #59 ที่เก่าถึง 4 ชม. และถ้า `Telemetry Sync` พัง/ถูกปิด จะเห็นจาก `Check Sensor Freshness` (แจ้ง Discord) กับคำเตือน "Pill เงียบมา X ชม." ใน prompt/embed ที่มีอยู่แล้ว
+**ผลข้างเคียงที่ยอมรับ**: `Phase Analysis Cron` ไม่ได้ดึงข้อมูลเองแล้ว จึงอ่านข้อมูลที่เก่าได้ถึง 15 นาที (จาก 0) — ยอมรับได้เพราะ Pill เองส่งข้อมูลทุก ~15 นาทีอยู่แล้ว ต่างจากบั๊ก #59 ที่เก่าถึง 4 ชม. และถ้า `Telemetry Sync` พัง/ถูกปิด จะเห็นจาก 3 ทาง: `sensor_stale` ของ Temp Guard (ทุก 15 นาที), คำเตือน "Pill เงียบมา X ชม." ใน prompt/embed, และ `Error Alert` ที่ต่อไว้เป็น `errorWorkflow` แล้ว (ดูข้อ 8.18)
 
 **ยังไม่ได้แก้ในรอบนี้**: `/ferment_status` ยังไม่ดึงข้อมูลสดเอง แต่ปัญหาเบาลงจาก "เก่าได้ถึง 4 ชม." เหลือ "เก่าไม่เกิน 15 นาที" ถ้าต้องการสดจริงๆ ต้องเพิ่มสายดึง telemetry ในสาย status ของ `Discord Interactions Webhook` แยกอีกงาน
 
@@ -931,6 +931,108 @@ brewmaster ตอบเป็น **อุณหภูมิเบียร์ (P
 ทดสอบด้วย Node harness จำลอง 2 batch พร้อมกัน ยืนยัน `device_id`/`paired_temp_controller` ของแต่ละ reading ผูกกับ batch ที่ถูกต้อง ไม่สลับกัน + ตรวจอัตโนมัติทุก `$('...')` reference ในไฟล์ว่าชี้ไป node ที่รันก่อนหน้าเสมอตามลำดับใหม่
 
 **เจอเพิ่มระหว่างตรวจ (ยังไม่แก้)**: `Get Pill/Controller Telemetry` อ่าน `$json.pill_time_utc`/`controller_time_utc` เพื่อดึงเฉพาะข้อมูลใหม่ (adaptive fetch ตามที่ 8.3 เคยระบุ) แต่ `Get Latest Readings` **ไม่เคย return field พวกนี้** → เป็น `undefined` เสมอ → fallback ไปใช้ `start_date` ทุกครั้ง = ดึงประวัติทั้ง batch ใหม่หมดทุกรอบแล้ว insert ทับ (รอบที่ตรวจได้ 1,064 จุด ตั้งแต่วันเริ่ม batch) ยังทำงานถูกเพราะ insert เป็น idempotent แต่เปลือง RAPT API/DB และจะแย่ลงตามอายุ batch — แยกเป็นงานถัดไป
+
+---
+
+### 8.17 `batch_snapshot()` — ยุบ query วิเคราะห์ 3 ก้อนเหลือก้อนเดียว (9 ก.ย.)
+
+query 130 บรรทัดที่ประกอบภาพรวมของ batch (กราฟ gravity/อุณหภูมิ, สูตร, ยีสต์, ความสดเซ็นเซอร์,
+gap ระหว่าง Pill กับตู้) เคยถูก copy ไว้ **3 ที่** ต่างกันแค่วิธีระบุว่าเป็น batch ไหน:
+
+| ที่ | ระบุ batch ด้วย |
+|---|---|
+| `Phase Analysis Cron` / `Get Latest Readings` | พารามิเตอร์ `$1..$9` จาก `Get Active Batches` |
+| `Discord Interactions Webhook` / `Get Batch For Analysis` | ชื่อ Pill ที่ผู้ใช้พิมพ์ → resolve เองใน query |
+| `Phase Analysis Backtest` / `Get Simulated Readings` | batch_id + จุดตัดเวลา |
+
+ทุกครั้งที่แก้ตรรกะต้องไล่แก้ให้ครบสาม **และพลาดมาแล้วจริง** (ตอนเติมตัวกรอง `start_date`)
+ตอนตรวจระบบ 9 ก.ย.พบว่ามัน diverge อยู่จริง: cron คืน `batch_id` เป็น `int` ส่วน Discord คืนเป็น
+`text` ทั้งที่ป้อนเข้า `Phase Analysis Engine` ตัวเดียวกัน
+
+**ตอนนี้เหลือ function กลางตัวเดียว** (`sql/batch_snapshot.sql`) ทั้งสาม node เรียกมันแทน:
+
+```sql
+batch_snapshot(p_batch_id int,
+               p_as_of          timestamptz DEFAULT now(),   -- Backtest ส่งเวลาย้อนหลัง
+               p_start_override timestamptz DEFAULT NULL,    -- Backtest จำลองวันเริ่มหมัก
+               p_phase_override text        DEFAULT NULL)    -- Backtest ปิดเฟสจริงไม่ให้ AI ลอก
+```
+
+```
+Get Latest Readings      128 →  6 บรรทัด
+Get Batch For Analysis   146 → 13 บรรทัด
+Get Simulated Readings   130 →  5 บรรทัด
+                         404 → 24 บรรทัด
+```
+
+**คืนเป็น `TABLE` ไม่ใช่ `jsonb` ตั้งใจ** — n8n เห็นคอลัมน์หน้าตาเหมือนเดิมเป๊ะ โค้ดปลายทางที่อ้าง
+`$json.pill_series` ฯลฯ จึงไม่ต้องแก้สักบรรทัด
+
+**วิธีพิสูจน์ก่อนเปลี่ยน** (ทำก่อนแตะ workflow ใดๆ): สร้าง function ขึ้นมาเฉยๆ ไม่กระทบของที่รันอยู่
+แล้วรัน query เก่ากับ function ใหม่ในคำสั่งเดียวกัน แปลงทั้งสองแถวเป็น `jsonb` แล้วไล่เทียบทีละ key
+
+```sql
+WITH old AS ( <query เดิม> ), new AS (SELECT * FROM batch_snapshot(4)),
+     oj AS (SELECT to_jsonb(o) j FROM old o), nj AS (SELECT to_jsonb(n) j FROM new n)
+SELECT k FROM jsonb_object_keys((SELECT j FROM oj)) k
+WHERE ((SELECT j FROM oj)->k) IS DISTINCT FROM ((SELECT j FROM nj)->k);
+```
+
+ผล: **35 คอลัมน์ตรงกันหมด** ยกเว้นที่ตั้งใจให้ต่าง
+- `prep_alerted_for_phase` — เดิมเป็น **สตริง `"null"`** เพราะ n8n แปลง NULL เป็นข้อความตอนแทนค่า
+  (`$9` มี `NULLIF($9,'null')` กันไว้แล้ว แต่ `$7` ไม่มี) ตอนนี้เป็น NULL จริง — ที่ผ่านมาไม่เคยเสียหาย
+  เพราะใช้แค่เทียบ `nextPhase !== src.prep_alerted_for_phase` ซึ่งให้ผลเหมือนกันทั้งสองแบบ
+- `batch_id` — รวมเป็น `int` ทั้งระบบ
+
+⚠️ **`Is Batch Found?` ต้องแก้ตาม** — IF ตัวนี้ตั้ง `typeValidation: strict` กับ operator ชนิด string
+พอ `batch_id` กลายเป็น `int` มันจะโยน error **ทุกครั้งที่เรียก `/ferment_status`** ไม่ใช่แค่ตอนหาไม่เจอ
+แก้ที่ `leftValue` เป็น `{{ String($json.batch_id ?? '') }}` ซึ่งรับได้ทั้ง int, text และ null
+โดยไม่ต้องแตะ operator
+
+⚠️ **query ฝั่ง Discord ต้องคืน 1 แถวเสมอแม้หา batch ไม่เจอ** — เพราะ `Is Batch Found?` อ่าน
+`batch_id` จากแถวนั้น ถ้า node ไม่ส่งอะไรออกมาเลย ข้อความ "ไม่พบ batch" จะไม่ถูกส่ง จึงต้องใช้
+`(SELECT 1) anchor LEFT JOIN LATERAL (...) ON true` ไม่ใช่ JOIN ธรรมดา
+
+### 8.18 ต่อ `Error Alert` เข้ากับทุก workflow (9 ก.ย.)
+
+`Error Alert` (`XwfLoJXuD9Fk5nvn`) มี `Error Trigger` ครบพร้อมใช้มาตลอด แต่**ไม่มี workflow ไหนตั้ง
+`errorWorkflow` เลยสักตัว** — มันจึงไม่เคยทำงาน
+
+นี่คือสาเหตุที่บั๊ก 8 ก.ย. 12:00 หายไปเงียบๆ: `Insert Phase Log` (INSERT ธรรมดา ไม่มี `ON CONFLICT`)
+error แล้ว rollback — เห็นได้จาก `log_id` กระโดดจาก 84 ไป 86 เพราะ sequence ถูกกินไปแล้ว
+แต่ไม่มีใครรู้ กว่าจะเจอคือตอนไล่ `log_id` ทีละตัวเดือนถัดมา
+
+ตั้ง `errorWorkflow` ให้แล้ว 4 ตัว: `Telemetry Sync`, `Phase Analysis Cron`, `Phase Analysis Engine`,
+`Discord Interactions Webhook` (ระบุ `saveDataErrorExecution: "all"` ไว้ชัดเจนด้วย ไม่พึ่ง default)
+
+**ทดสอบจริงแล้ว** — ชี้ `Send Temp Alert` ไป channel ปลอมชั่วคราวให้มันพัง:
+```
+22:15:00  started  Telemetry Sync
+22:15:15  failed   Telemetry Sync
+22:15:15  started  Error Alert      ← ยิงเองอัตโนมัติ
+22:15:16  success  Error Alert      ← ข้อความถึง Discord
+```
+แล้วคืนค่าเดิมทันที
+
+**`Telemetry Sync` ตั้ง `saveDataSuccessExecution: "none"` ด้วย** — มันรัน 96 ครั้ง/วันและส่งข้อมูล
+หลายร้อย item ผ่านทุก node ซึ่ง n8n เก็บไว้ทั้งหมด (sqlite โต 303 MB เทียบกับฐานข้อมูลจริง 10 MB)
+ยังเก็บ execution ที่ **error** ไว้ครบเหมือนเดิม
+
+### 8.19 `TZ` ที่หายไป (9 ก.ย.)
+
+n8n ต้องได้ **สองตัวแปรคู่กัน** — `GENERIC_TIMEZONE` คุมตาราง cron ส่วน `TZ` คุมเวลาที่ Node แสดงผล
+เดิมตั้งแค่ตัวแรก container จึงเป็น UTC และเวลาที่โผล่ในหน้า executions ช้ากว่าเวลาไทย 7 ชม.
+
+```yaml
+- GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+- TZ=${GENERIC_TIMEZONE}          # ตัวที่ขาด
+```
+
+ตารางรันไม่เคยผิด (`*/15` เหมือนกันทุก timezone และ Phase Analysis ก็ยิง 08:00 น.ไทยถูกมาตลอด)
+ผิดแค่เวลาที่แสดง
+
+⚠️ **`docker compose up -d n8n` จะไม่ recreate ถ้า compose ไม่เปลี่ยน** — ถ้าแก้แค่ workflow
+ต้องใช้ `docker compose restart n8n` ไม่งั้นโค้ดที่ publish ไปแล้วจะไม่ถูกโหลด
 
 ---
 

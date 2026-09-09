@@ -467,5 +467,10 @@
   "pinData": {},
   "meta": {
     "instanceId": "telemetry-sync"
+  },
+  "settings": {
+    "errorWorkflow": "XwfLoJXuD9Fk5nvn",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
   }
 }

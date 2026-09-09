@@ -7,3 +7,4 @@ data/
 # macOS
 .DS_Store
 backups/
+.claude/settings.local.json
