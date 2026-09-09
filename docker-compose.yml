@@ -49,6 +49,10 @@ services:
       - NODE_ENV=production
       - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      # n8n ต้องได้ทั้งสองตัว: GENERIC_TIMEZONE คุมตาราง cron ส่วน TZ คุมเวลาที่ Node
+      # แสดงผล ถ้าตั้งแค่ตัวแรก container จะเป็น UTC แล้วเวลาที่โผล่ในหน้า executions
+      # ช้ากว่าเวลาไทย 7 ชม. (ตารางรันถูกต้อง ผิดแค่ที่แสดง — เจอจริง 9 ก.ย.)
+      - TZ=${GENERIC_TIMEZONE}
       - N8N_PROXY_HOPS=1
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - NODE_FUNCTION_ALLOW_BUILTIN=crypto
