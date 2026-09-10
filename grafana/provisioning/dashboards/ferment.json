@@ -72,7 +72,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT detected_phase AS \"เฟส\" FROM phase_log WHERE batch_id = (SELECT batch_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\n ORDER BY checked_at DESC LIMIT 1",
           "datasource": {
@@ -171,7 +171,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - MIN(checked_at)))/3600 AS \"ชม.\"\nFROM phase_log WHERE batch_id = (SELECT batch_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\n  AND checked_at > COALESCE((SELECT MAX(checked_at) FROM phase_log\n        WHERE batch_id = (SELECT batch_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AND detected_phase IS DISTINCT FROM (SELECT detected_phase FROM phase_log WHERE batch_id = (SELECT batch_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) ORDER BY checked_at DESC LIMIT 1)),\n        '-infinity'::timestamptz)",
           "datasource": {
@@ -227,7 +227,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT p.temperature_c FROM pill_readings p\n WHERE p.device_id = '$pill'::uuid ORDER BY p.time_utc DESC LIMIT 1",
           "datasource": {
@@ -283,7 +283,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT c.temperature_c AS \"ตู้\", c.target_temperature_c AS \"target\"\nFROM temp_controller_readings c WHERE c.device_id = (SELECT temp_controller_device_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY c.time_utc DESC LIMIT 1",
           "datasource": {
@@ -342,7 +342,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(p.time_utc)))/60 AS \"นาทีก่อน\"\n FROM pill_readings p WHERE p.device_id = '$pill'::uuid",
           "datasource": {
@@ -406,7 +406,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(c.time_utc)))/60 AS \"นาทีก่อน\"\n FROM temp_controller_readings c WHERE c.device_id = (SELECT temp_controller_device_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)",
           "datasource": {
@@ -470,7 +470,7 @@
       "targets": [
         {
           "refId": "A",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)))/86400 AS \"วัน\"",
           "datasource": {
