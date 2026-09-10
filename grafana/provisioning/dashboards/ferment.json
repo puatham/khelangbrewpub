@@ -10,7 +10,7 @@
   "refresh": "5m",
   "editable": true,
   "time": {
-    "from": "now-14d",
+    "from": "now-30d",
     "to": "now"
   },
   "templating": {
@@ -25,6 +25,21 @@
         },
         "query": "SELECT device_name AS __text, device_id::text AS __value FROM devices WHERE device_type = 'pill' ORDER BY device_name",
         "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {}
+      },
+      {
+        "name": "range",
+        "label": "ช่วงของ batch",
+        "type": "query",
+        "hide": 2,
+        "datasource": {
+          "type": "postgres",
+          "uid": "rapt-pg"
+        },
+        "query": "SELECT CEIL(EXTRACT(EPOCH FROM (now() - start_date))/3600)::int::text || 'h' AS range FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1",
+        "refresh": 2,
         "includeAll": false,
         "multi": false,
         "current": {}
@@ -391,7 +406,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "$range"
     },
     {
       "id": 2,
@@ -442,7 +458,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "$range"
     },
     {
       "id": 3,
@@ -519,7 +536,8 @@
           "mode": "multi",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "$range"
     },
     {
       "id": 4,
@@ -589,7 +607,8 @@
           "mode": "single",
           "sort": "none"
         }
-      }
+      },
+      "timeFrom": "$range"
     }
   ]
 }

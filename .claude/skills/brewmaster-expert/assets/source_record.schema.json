@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Brewmaster Source Record",
+  "type": "object",
+  "required": ["source_id", "title", "source_type", "retrieved_at", "applicability"],
+  "properties": {
+    "source_id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
+    "organization_or_author": {"type": ["string", "null"]},
+    "source_type": {"enum": ["brewery-measurement", "coa", "manufacturer", "professional", "peer-reviewed", "textbook", "software-doc", "style-guide", "practitioner", "community", "other"]},
+    "edition_or_version": {"type": ["string", "null"]},
+    "publication_or_revision_date": {"type": ["string", "null"]},
+    "retrieved_at": {"type": "string", "format": "date"},
+    "url_or_document_id": {"type": ["string", "null"]},
+    "applicability": {"type": "string", "minLength": 1},
+    "product_or_lot": {"type": ["string", "null"]},
+    "status": {"enum": ["current", "legacy", "conflicting", "unknown"]},
+    "notes": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

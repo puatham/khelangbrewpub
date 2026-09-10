@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Brewery Profile",
+  "type": "object",
+  "required": ["profile_id", "units", "brewhouse"],
+  "properties": {
+    "profile_id": {"type": "string"},
+    "units": {"const": "metric"},
+    "brewhouse": {
+      "type": "object",
+      "properties": {
+        "system_type": {"type": ["string", "null"]},
+        "target_batch_l": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "vessels": {"type": "array", "items": {"type": "object"}},
+        "brewhouse_efficiency_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "mash_efficiency_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "boil_off_l_per_h": {"type": ["number", "null"], "minimum": 0},
+        "trub_chiller_loss_l": {"type": ["number", "null"], "minimum": 0},
+        "mash_tun_loss_l": {"type": ["number", "null"], "minimum": 0},
+        "hlt_deadspace_l": {"type": ["number", "null"], "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "fermentation": {"type": "object", "additionalProperties": true},
+    "packaging": {"type": "object", "additionalProperties": true},
+    "draught": {"type": "object", "additionalProperties": true},
+    "calibration_notes": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

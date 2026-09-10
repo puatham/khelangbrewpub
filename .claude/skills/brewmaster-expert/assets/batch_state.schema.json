@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Brewing Batch State",
+  "type": "object",
+  "required": ["batch_id", "phase"],
+  "properties": {
+    "batch_id": {"type": "string"},
+    "recipe_id": {"type": ["string", "null"]},
+    "phase": {"enum": ["planning", "mash", "boil", "chilling", "pre-pitch", "lag", "active-fermentation", "mid-fermentation", "terminal-approach", "maturation", "fg-verification", "cold-conditioning", "packaging-ready", "packaged"]},
+    "planned": {"type": "object", "additionalProperties": true},
+    "manual_measurements": {"type": "array", "items": {"type": "object"}},
+    "telemetry": {"type": "array", "items": {"type": "object"}},
+    "dry_hop_state": {"type": ["object", "null"], "additionalProperties": true},
+    "qc": {"type": "object", "additionalProperties": true},
+    "current_risks": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

@@ -108,6 +108,16 @@ services:
       - GF_AUTH_GOOGLE_API_URL=https://openidconnect.googleapis.com/v1/userinfo
       # ตัวสำคัญ — อีเมลที่ยังไม่มี user ใน Grafana จะถูกปฏิเสธ ไม่สร้างให้อัตโนมัติ
       - GF_AUTH_GOOGLE_ALLOW_SIGN_UP=false
+      # จำเป็นคู่กับบรรทัดบน — ตั้งแต่ Grafana 9.3 (CVE-2023-3128) การจับคู่ล็อกอิน OAuth
+      # เข้ากับ user เดิม "ด้วยอีเมล" ถูกปิดเป็นค่าเริ่มต้น ผลคือ Google ยืนยันตัวตนผ่าน
+      # แล้ว Grafana ยังพยายามสร้าง user ใหม่ ซึ่งโดน allow_sign_up=false บล็อกอีกที
+      # → ล็อกอินไม่ได้เลยทั้งที่ตั้งค่าถูกทุกอย่าง (เจอจริง 10 ก.ย.)
+      #
+      # ชื่อมัน "insecure" เพราะถ้าใช้หลาย identity provider เจ้าที่ไม่ตรวจสอบอีเมลจะ
+      # อ้างอีเมลของคนอื่นแล้วยึดบัญชีได้ ที่นี่ไม่เข้าเงื่อนไขนั้น: มี provider เดียวคือ
+      # Google ซึ่งตรวจสอบความเป็นเจ้าของอีเมลจริง, แอปอยู่สถานะ Testing ที่ระบุ test user
+      # ไว้แล้ว, และ sign-up ยังปิดอยู่ — คนที่จะเข้าได้ต้องคุมบัญชี Google นั้นจริงๆ
+      - GF_AUTH_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP=true
       - GF_DB_PASSWORD=${GF_DB_PASSWORD}
       - TZ=${GENERIC_TIMEZONE}
       - GF_ANALYTICS_REPORTING_ENABLED=false
