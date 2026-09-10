@@ -565,6 +565,46 @@
         "button_target_c": 16.5,
         "embeds.0.description": "~!กำลังกลับเข้าที่เอง"
       }
+    },
+    {
+      "name": "hop creep — เริ่มลด target ไป cold crash ขณะเพิ่ง dry hop ต้องเตือน ไม่มีปุ่ม",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "hop_creep_watch",
+          "current_phase": "slowing_ferment",
+          "pill_c": 18.1,
+          "ctrl_c": 16.2,
+          "target_c": 4.0,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": null,
+          "tgt_stable_h": 0.2,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": null,
+          "hours_to_floor": null,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true,
+          "dry_hop_age_h": 26.8
+        }
+      ],
+      "expect": {
+        "button_target_c": null,
+        "embeds.0.title": "~ระวัง hop creep ก่อน cold crash",
+        "embeds.0.description": [
+          "~dry hop ไปเมื่อ 26.8 ชม.ก่อน",
+          "~ลด target ลงไป 4.00°C",
+          "~ไฮโดรมิเตอร์มือ",
+          "~ขวดระเบิด"
+        ]
+      }
     }
   ]
 }

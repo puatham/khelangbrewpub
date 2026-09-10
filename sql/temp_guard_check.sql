@@ -35,6 +35,7 @@ RETURNS TABLE (
   hours_to_ceil  numeric,
   floor_c        numeric,
   ceil_c         numeric,
+  dry_hop_age_h  numeric,
   is_fresh_alert boolean
 )
 LANGUAGE sql
@@ -54,6 +55,13 @@ WITH act AS (
   LEFT JOIN recipes rc ON rc.recipe_id = b.recipe_id
   LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(rc.yeast_name))
   WHERE b.status = 'active'
+),
+dry_hop AS (
+  -- dry hop ล่าสุดของแต่ละ batch จาก /ferment_event (สิ่งที่ทำจริง ไม่ใช่ Day ในสูตร)
+  SELECT a.batch_id,
+         (SELECT max(e.occurred_at) FROM batch_events e
+           WHERE e.batch_id = a.batch_id AND e.event_type = 'dry_hop') AS last_at
+  FROM act a
 ),
 pill_now AS (
   SELECT a.batch_id,
@@ -97,8 +105,11 @@ m AS (
          abs(p.pill - p.pill_1h) AS pill_move_1h,
          EXTRACT(EPOCH FROM (now() - COALESCE(c.tgt_changed_at, now() - INTERVAL '99 hours')))/3600 AS tgt_stable_h,
          EXTRACT(EPOCH FROM (now() - p.pill_at))/3600 AS pill_age_h,
-         EXTRACT(EPOCH FROM (now() - c.ctrl_at))/3600 AS ctrl_age_h
+         EXTRACT(EPOCH FROM (now() - c.ctrl_at))/3600 AS ctrl_age_h,
+         dh.last_at AS dry_hop_at,
+         EXTRACT(EPOCH FROM (now() - dh.last_at))/3600 AS dry_hop_age_h
   FROM act a JOIN pill_now p ON p.batch_id=a.batch_id JOIN ctrl_now c ON c.batch_id=a.batch_id
+             LEFT JOIN dry_hop dh ON dh.batch_id=a.batch_id
 ),
 m2 AS (
   -- ขอบที่จะชนก่อนเมื่อไหลลง/ขึ้น = ขอบที่ "ใกล้กว่า" ระหว่างช่วงที่ตั้งเองกับช่วงยีสต์
@@ -132,6 +143,13 @@ decided AS (
       WHEN dev > 2.5 AND dev_1h IS NOT NULL AND dev_1h > 2.5 AND dev > dev_1h - 0.3 THEN 'controller_lag'
       -- D เปลี่ยนเร็วผิดปกติ: >1.5°C/ชม. (p99=1.49) ทั้งที่ target ไม่ได้เพิ่งเปลี่ยน
       WHEN pill_move_1h > 1.5 AND tgt_stable_h > 1 THEN 'rapid_change'
+      -- E hop creep: กำลังลด target ลงไปช่วง cold crash ทั้งที่เพิ่ง dry hop
+      --   เอนไซม์จากฮอปย่อยเดกซ์ทรินให้เป็นน้ำตาลที่ยีสต์กินได้ การหมักจึงกลับมาได้อีก
+      --   หลัง dry hop กราฟ gravity ที่ดูแบนแล้วอาจลงต่อ — ถ้า crash แล้วบรรจุตอนนั้น
+      --   จะได้คาร์บอเนชันเกินหรือขวดระเบิด (BA Hop Creep Technical Brief)
+      --   เตือน "ตอนลงมือ" ไม่ใช่ตอนครบเวลา เพราะการเตือนตามนาฬิกาจะกลายเป็นเสียงรบกวน
+      --   ส่วนคำเตือนแบบเบากว่าอยู่ใน prompt ของรอบวิเคราะห์ 4 ชม.อยู่แล้ว
+      WHEN dry_hop_at IS NOT NULL AND dry_hop_age_h <= 72 AND tgt <= 10 THEN 'hop_creep_watch'
       -- B หลุดช่วงยีสต์: เผื่อ 0.2°C กันแกว่งไปมาตรงขอบพอดี
       WHEN yeast_min IS NOT NULL AND pill < yeast_min - 0.2 THEN 'yeast_low'
       WHEN yeast_max IS NOT NULL AND pill > yeast_max + 0.2 THEN 'yeast_high'
@@ -179,6 +197,7 @@ SELECT d.batch_id, d.beer_name, COALESCE(d.kind, 'ok') AS alert_kind, d.current_
        round(d.hours_to_floor::numeric, 1) AS hours_to_floor,
        round(d.hours_to_ceil::numeric, 1) AS hours_to_ceil,
        round(d.floor_c::numeric, 2) AS floor_c, round(d.ceil_c::numeric, 2) AS ceil_c,
+       round(d.dry_hop_age_h::numeric, 1) AS dry_hop_age_h,
        -- แถวนี้ผ่าน dedupe มาจริง หรือถูกกลืนแล้วโผล่มาเพราะโหมดแจ้งทุกรอบ
        -- Build Temp Alert ใช้แยก "เตือนครั้งแรก" ออกจาก "แจ้งซ้ำ" จะได้ไม่อ่านเหมือน
        -- มีเหตุใหม่เกิดซ้ำทุก 15 นาที

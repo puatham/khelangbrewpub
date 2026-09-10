@@ -13,6 +13,8 @@
 #   3. expression ไม่มี }} ติดกันอยู่ข้างใน
 #   4. จำนวนค่าใน queryReplacement ตรงกับจำนวน $n สูงสุดใน query
 #   5. node ที่รันเองต้องตั้ง errorWorkflow (ไม่งั้นพังเงียบ)
+#   6. $('ชื่อ node') ต้องชี้ไป node ที่มีอยู่จริง (เปลี่ยนชื่อแล้วลืมแก้ที่อ้าง)
+#   7. Code node ที่ป้อนเข้า HTTP ต้องส่งฟิลด์ที่ URL ของมันใช้ — ลืมแล้ว path เพี้ยนเงียบๆ
 #
 # ใช้:  ./validate-workflows.py [ไฟล์...]      ไม่ใส่ = ตรวจ workflows/*.json ทั้งหมด
 # คืน exit code 1 ถ้าเจอปัญหา — deploy-workflows.sh เรียกตัวนี้ก่อนส่งขึ้นเซิร์ฟเวอร์
@@ -135,6 +137,46 @@ def check_query_params(wf_name, node_name, params):
              f'    {repl[:150]}')
 
 
+def check_http_inputs(wf_name, wf, nodes_by_name):
+    """node ที่ป้อนเข้า HTTP ต้องส่งฟิลด์ที่ URL/body ของมันอ้างถึงมาด้วย
+
+    n8n อ้าง $json ของ "item ที่ไหลเข้ามา" ไม่ใช่ของ node ต้นทางตามชื่อ ถ้า Code node
+    ลืมส่งฟิลด์ต่อ ค่าจะกลายเป็น undefined เงียบๆ แล้วไปพังที่ปลายทางแทน
+    เจอจริง 10 ก.ย.: Build Event Message ส่งแต่ content ทำให้ URL เป็น
+    /webhooks///messages/@original แล้ว Discord ตอบ "Value \"messages\" is not snowflake"
+    """
+    incoming = {}
+    for src, conn in (wf.get('connections') or {}).items():
+        for branch in conn.get('main', []) or []:
+            for link in branch or []:
+                incoming.setdefault(link.get('node'), []).append(src)
+
+    for node in wf['nodes']:
+        if not node['type'].endswith('httpRequest'):
+            continue
+        # ตรวจเฉพาะฟิลด์ที่อยู่ใน "url" — พวกนี้เป็นโครงสร้าง ขาดแล้ว path เพี้ยนทันที
+        # ส่วนฟิลด์ใน body มักเป็น optional (เช่น $json.embeds ที่อยู่ในเงื่อนไข ternary)
+        # ถ้าตรวจ body ด้วยจะ fail node ที่ทำงานถูกอยู่แล้วทั้งหมด
+        url = node.get('parameters', {}).get('url') or ''
+        needed = set()
+        for m in re.finditer(r'\$json\.(\w+)', url):
+            seg = url[max(0, m.start() - 40):m.start()]
+            if "$(" not in seg[-25:]:
+                needed.add(m.group(1))
+        if not needed:
+            continue
+        for src in incoming.get(node['name'], []):
+            code = nodes_by_name.get(src, {}).get('parameters', {}).get('jsCode')
+            if not code:
+                continue          # ตรวจได้เฉพาะ Code node ที่อ่านโค้ดได้
+            missing = sorted(f for f in needed if f not in code)
+            if missing:
+                fail(wf_name, src,
+                     f'ไม่ได้ส่งฟิลด์ที่ "{node["name"]}" ต้องใช้: {", ".join(missing)}',
+                     'n8n อ่าน $json จาก item ที่ไหลเข้า ไม่ใช่จาก node ต้นทางตามชื่อ —\n'
+                     '    ลืมส่งต่อแล้วจะเป็น undefined เงียบๆ ไปพังที่ HTTP node แทน')
+
+
 def main():
     files = sys.argv[1:] or sorted(
         os.path.join('workflows', f) for f in os.listdir('workflows') if f.endswith('.json'))
@@ -167,6 +209,8 @@ def main():
             # ตัด jsCode ออกก่อน ไม่งั้นรายงานซ้ำกับรอบบน
             others = {k: v for k, v in params.items() if k != 'jsCode'}
             check_node_refs(name, node['name'], json.dumps(others, ensure_ascii=False), known, 'expression')
+
+        check_http_inputs(name, wf, {x['name']: x for x in wf['nodes']})
 
         # สายที่ต่อไว้ใน connections ต้องชี้ไป node ที่มีจริงเช่นกัน
         for src, conn in (wf.get('connections') or {}).items():

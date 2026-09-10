@@ -27,7 +27,9 @@
           {
             "pill": "Pill01",
             "event_note": "รอบ 1 Citra",
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
@@ -38,7 +40,9 @@
           "~20.5 ชม.ที่แล้ว",
           "~ไทม์ไลน์ของ batch นี้",
           "~07/09/2026 23:00   เริ่มหมัก"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -54,7 +58,9 @@
           {
             "pill": "PillZZZ",
             "event_note": null,
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
@@ -63,7 +69,9 @@
           "~ไม่พบ batch",
           "~PillZZZ",
           "~!ไทม์ไลน์"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -86,7 +94,9 @@
           {
             "pill": "Pill01",
             "event_note": null,
-            "event_date_raw": "9 ก.ย. 18:00"
+            "event_date_raw": "9 ก.ย. 18:00",
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
@@ -94,7 +104,9 @@
         "content": [
           "~อ่านวันที่ \"9 ก.ย. 18:00\" ไม่ออก",
           "~d/m/yyyy HH:mm"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -119,14 +131,18 @@
           {
             "pill": "Pill01",
             "event_note": null,
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
       "expect": {
         "content": [
           "~12/09/2026 18:00 อยู่ในอนาคต"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -151,14 +167,18 @@
           {
             "pill": "Pill01",
             "event_note": null,
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
       "expect": {
         "content": [
           "~อยู่ก่อนวันเริ่มหมัก (07/09/2026 23:00)"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -184,7 +204,9 @@
           {
             "pill": "Pill01",
             "event_note": null,
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
@@ -193,7 +215,9 @@
           "~✅ ลบแล้ว — 🌿 Dry hop 09/09/2026 18:00",
           "~(ยังไม่มีเหตุการณ์อื่น)",
           "~!รอบ 1 Citra"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     },
     {
@@ -212,14 +236,18 @@
           {
             "pill": "Pill01",
             "event_note": null,
-            "event_date_raw": null
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
           }
         ]
       },
       "expect": {
         "content": [
           "~ไม่มีเหตุการณ์ให้ลบ"
-        ]
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
       }
     }
   ]
