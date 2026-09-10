@@ -65,6 +65,40 @@ done < <(ls -1 "$WF_DIR"/*.json)
 
 [ ${#FILES[@]} -gt 0 ] || { echo "ไม่มีไฟล์ตรงกับที่ระบุ"; exit 1; }
 
+# ---------------------------------------------------------------------
+# ตรวจก่อนส่ง — ถูกกว่ารู้ตอน cron รันจริงมาก
+# 9 ก.ย. `cache_control:{type:'ephemeral'}}]` หลุดขึ้น production เพราะ n8n เห็น }}
+# แล้วปิด expression ตรงนั้น กว่าจะรู้คือ Phase Analysis Engine พังทั้งตัวตอน cron ยิง
+# ข้ามได้ด้วย SKIP_VALIDATE=1 แต่ควรใช้เฉพาะตอนรู้ตัวว่ากำลังทำอะไรอยู่
+# ---------------------------------------------------------------------
+if [ "${SKIP_VALIDATE:-0}" != "1" ]; then
+  VALIDATOR="$(cd "$(dirname "$0")" && pwd)/validate-workflows.py"
+  if [ -x "$VALIDATOR" ]; then
+    "$VALIDATOR" "${FILES[@]}" || {
+      echo
+      echo "หยุดก่อน deploy — แก้ให้ผ่านแล้วค่อยสั่งใหม่"
+      echo "(ถ้าจงใจข้ามจริงๆ: SKIP_VALIDATE=1 $0 ...)"
+      exit 1
+    }
+    echo
+  else
+    echo "⚠️  ไม่เจอ validate-workflows.py — ข้ามการตรวจ"
+  fi
+
+  # เทสอ่าน jsCode จาก workflow JSON ตรงๆ จึงเทสของที่กำลังจะ deploy จริง ไม่ใช่สำเนา
+  TESTS="$(cd "$(dirname "$0")" && pwd)/tests/run-tests.mjs"
+  if [ -f "$TESTS" ]; then
+    node "$TESTS" >/tmp/deploy-tests.log 2>&1 || {
+      cat /tmp/deploy-tests.log
+      echo
+      echo "หยุดก่อน deploy — เทสไม่ผ่าน"
+      exit 1
+    }
+    tail -1 /tmp/deploy-tests.log
+    echo
+  fi
+fi
+
 echo "จะ deploy ${#FILES[@]} workflow ไปที่ $REMOTE_HOST:"
 for i in "${!FILES[@]}"; do printf '  %-32s %s\n' "${NAMES[$i]}" "${IDS[$i]}"; done
 if [ "$DRY_RUN" -eq 1 ]; then echo; echo "(--dry-run ไม่ได้แตะอะไร)"; exit 0; fi

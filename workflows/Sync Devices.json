@@ -472,7 +472,9 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "availableInMCP": false
+    "availableInMCP": false,
+    "errorWorkflow": "XwfLoJXuD9Fk5nvn",
+    "saveDataErrorExecution": "all"
   },
   "staticData": null,
   "meta": {

@@ -1,0 +1,311 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Parse Brewmaster",
+  "cases": [
+    {
+      "name": "เห็นด้วยกับเฟส — ต้องไม่โชว์ข้อความสงสัย",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"ok\",\"phase_agrees\":true,\"phase_doubt_reason\":null,\"notes\":[\"กราฟลงต่อเนื่อง\"],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "brewmaster_verdict": "ok",
+        "brewmaster_phase_agrees": true,
+        "brewmaster_phase_doubt": null,
+        "beer_name": "Hazy DIPA"
+      }
+    },
+    {
+      "name": "ไม่เห็นด้วย — ต้องโชว์เหตุผลที่สงสัย",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"watch\",\"phase_agrees\":false,\"phase_doubt_reason\":\"SG ยังลงชันอยู่ ไม่น่าเข้า fg_stable\",\"notes\":[],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "fg_stable",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 3066993,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expect": {
+        "brewmaster_phase_agrees": false,
+        "brewmaster_phase_doubt": "SG ยังลงชันอยู่ ไม่น่าเข้า fg_stable"
+      }
+    },
+    {
+      "name": "ตอบขัดกันเอง: agrees=true แต่เขียนเหตุผลสงสัยมาด้วย — ต้องไม่โชว์ (บั๊กจริง 8 ก.ย.)",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"ok\",\"phase_agrees\":true,\"phase_doubt_reason\":\"ไม่มีข้อขัดแย้งที่น่าสงสัย\",\"notes\":[],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expect": {
+        "brewmaster_phase_agrees": true,
+        "brewmaster_phase_doubt": null
+      }
+    },
+    {
+      "name": "เสนออุณหภูมิต่ำกว่าช่วงยีสต์ — ต้องถูกปฏิเสธ",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"concern\",\"phase_agrees\":true,\"suggested_pill_temp_c\":16.0,\"suggested_reason\":\"ลดลงหน่อย\",\"notes\":[],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expect": {
+        "brewmaster_suggested_pill_temp_c": null,
+        "brewmaster_suggested_target_c": null
+      }
+    },
+    {
+      "name": "agent ตัวแรกเสนอไปแล้ว — brewmaster ห้ามเสนอซ้อน",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"watch\",\"phase_agrees\":true,\"suggested_pill_temp_c\":19.0,\"suggested_reason\":\"ดันขึ้นหน่อย\",\"notes\":[],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "recommended_controller_target_c": 16.5,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expect": {
+        "brewmaster_suggested_pill_temp_c": null,
+        "brewmaster_suggested_target_c": null
+      }
+    },
+    {
+      "name": "cold_crash เป็นงานของ agent ตัวแรก — brewmaster ห้ามเสนอ",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"verdict\":\"watch\",\"phase_agrees\":true,\"suggested_pill_temp_c\":19.0,\"suggested_reason\":\"ดันขึ้น\",\"notes\":[],\"risks\":[]}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "cold_crash",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 1752220,
+                "description": "x"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expect": {
+        "brewmaster_suggested_pill_temp_c": null
+      }
+    },
+    {
+      "name": "Claude ตอบไม่เป็น JSON — ผลของ agent ตัวแรกต้องรอดครบ",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "ขอโทษครับ ผมตอบไม่ได้"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse AI Response": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "recommended_controller_target_c": null,
+            "stable_gap_c": 1.7,
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "ข้อความหลัก"
+              }
+            ]
+          }
+        ],
+        "Build AI Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_min_temp_c": 18,
+              "yeast_max_temp_c": 25
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "discord_embeds.0.description": "ข้อความหลัก",
+        "brewmaster_error": "~SyntaxError"
+      }
+    }
+  ]
+}

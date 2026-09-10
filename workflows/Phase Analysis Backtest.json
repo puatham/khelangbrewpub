@@ -206,5 +206,9 @@
   "pinData": {},
   "meta": {
     "instanceId": "backtest-tool"
+  },
+  "settings": {
+    "errorWorkflow": "XwfLoJXuD9Fk5nvn",
+    "saveDataErrorExecution": "all"
   }
 }
