@@ -1,0 +1,226 @@
+{
+  "workflow": "Discord Interactions Webhook",
+  "node": "Build Event Message",
+  "cases": [
+    {
+      "name": "บันทึกสำเร็จ — ต้องมีชื่อเบียร์ เวลา ระยะเวลาที่ผ่านมา และไทม์ไลน์",
+      "input": [
+        {
+          "verdict": "ok",
+          "beer_name": "Hazy DIPA",
+          "requested_type": "dry_hop",
+          "at_text": "09/09/2026 18:00",
+          "hours_ago": 20.5,
+          "start_text": "07/09/2026 23:00",
+          "timeline": [
+            {
+              "at": "09/09/2026 18:00",
+              "type": "dry_hop",
+              "note": "รอบ 1 Citra"
+            }
+          ],
+          "added_count": 1
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": "รอบ 1 Citra",
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~✅ บันทึกแล้ว — Hazy DIPA",
+          "~🌿 Dry hop · 09/09/2026 18:00",
+          "~20.5 ชม.ที่แล้ว",
+          "~ไทม์ไลน์ของ batch นี้",
+          "~07/09/2026 23:00   เริ่มหมัก"
+        ]
+      }
+    },
+    {
+      "name": "ไม่พบ batch — ต้องบอกชื่อ Pill ที่หาไม่เจอ และไม่โชว์ไทม์ไลน์",
+      "input": [
+        {
+          "verdict": "no_batch",
+          "timeline": null
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "PillZZZ",
+            "event_note": null,
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~ไม่พบ batch",
+          "~PillZZZ",
+          "~!ไทม์ไลน์"
+        ]
+      }
+    },
+    {
+      "name": "วันที่อ่านไม่ออก — ต้องบอกรูปแบบที่ถูก ไม่ใช่เงียบแล้วใช้เวลาปัจจุบัน",
+      "input": [
+        {
+          "verdict": "bad_date",
+          "beer_name": "Hazy DIPA",
+          "timeline": [
+            {
+              "at": "09/09/2026 18:00",
+              "type": "dry_hop",
+              "note": "รอบ 1 Citra"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": null,
+            "event_date_raw": "9 ก.ย. 18:00"
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~อ่านวันที่ \"9 ก.ย. 18:00\" ไม่ออก",
+          "~d/m/yyyy HH:mm"
+        ]
+      }
+    },
+    {
+      "name": "วันอนาคต — ปฏิเสธ",
+      "input": [
+        {
+          "verdict": "future",
+          "beer_name": "Hazy DIPA",
+          "at_text": "12/09/2026 18:00",
+          "start_text": "07/09/2026 23:00",
+          "timeline": [
+            {
+              "at": "09/09/2026 18:00",
+              "type": "dry_hop",
+              "note": "รอบ 1 Citra"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": null,
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~12/09/2026 18:00 อยู่ในอนาคต"
+        ]
+      }
+    },
+    {
+      "name": "ก่อนวันเริ่มหมัก — ปฏิเสธ พร้อมบอกวันเริ่มจริง",
+      "input": [
+        {
+          "verdict": "before_start",
+          "beer_name": "Hazy DIPA",
+          "at_text": "06/09/2026 10:00",
+          "start_text": "07/09/2026 23:00",
+          "timeline": [
+            {
+              "at": "09/09/2026 18:00",
+              "type": "dry_hop",
+              "note": "รอบ 1 Citra"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": null,
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~อยู่ก่อนวันเริ่มหมัก (07/09/2026 23:00)"
+        ]
+      }
+    },
+    {
+      "name": "undo — ต้องตัดรายการที่ลบออกจากไทม์ไลน์ด้วย ไม่งั้นดูเหมือนลบไม่ติด",
+      "input": [
+        {
+          "verdict": "undo",
+          "beer_name": "Hazy DIPA",
+          "removed_type": "dry_hop",
+          "removed_at_text": "09/09/2026 18:00",
+          "start_text": "07/09/2026 23:00",
+          "timeline": [
+            {
+              "at": "09/09/2026 18:00",
+              "type": "dry_hop",
+              "note": "รอบ 1 Citra"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": null,
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~✅ ลบแล้ว — 🌿 Dry hop 09/09/2026 18:00",
+          "~(ยังไม่มีเหตุการณ์อื่น)",
+          "~!รอบ 1 Citra"
+        ]
+      }
+    },
+    {
+      "name": "undo ตอนไม่มีอะไรให้ลบ",
+      "input": [
+        {
+          "verdict": "undo",
+          "beer_name": "Hazy DIPA",
+          "removed_type": null,
+          "start_text": "07/09/2026 23:00",
+          "timeline": null
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": null,
+            "event_date_raw": null
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~ไม่มีเหตุการณ์ให้ลบ"
+        ]
+      }
+    }
+  ]
+}

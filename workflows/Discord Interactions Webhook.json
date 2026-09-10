@@ -187,7 +187,7 @@
     },
     {
       "parameters": {
-        "jsCode": "function parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp', ferment_recipes: 'recipes', ferment_band: 'band' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    search: params.search || null,\n    band_low: params.low != null ? Number(params.low) : null,\n    band_high: params.high != null ? Number(params.high) : null,\n    band_clear: params.clear === true,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
+        "jsCode": "// อ่านวันที่แบบ \"บอกเมื่ออ่านไม่ออก\" — ต่างจาก parseStartDate ที่เงียบๆ ใช้เวลาปัจจุบันแทน\n// ซึ่งอันตรายกับการบันทึกเหตุการณ์ย้อนหลัง: พิมพ์ผิดแล้วได้เวลาที่กดคำสั่งไปเลยโดยไม่มีใครรู้\n// (dry hop เมื่อวาน 18:00 กลายเป็นวันนี้ 14:00 = ผิดไป 20 ชม.ในข้อมูลที่ใช้ตัดสิน hop creep)\nfunction parseEventDate(str) {\n  if (!str) return { iso: new Date().toISOString(), ok: true, used_now: true };\n  const m = String(str).trim().match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return { iso: null, ok: false, used_now: false };\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) {\n    return { iso: null, ok: false, used_now: false };\n  }\n  const pad = (n) => String(n).padStart(2, '0');\n  return { iso: `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`, ok: true, used_now: false };\n}\n\nfunction parseStartDate(str) {\n  if (!str) return new Date().toISOString();\n  const m = str.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})\\s+(\\d{1,2}):(\\d{2})$/);\n  if (!m) return new Date().toISOString();\n  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]), hour = Number(m[4]), minute = Number(m[5]);\n  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return new Date().toISOString();\n  const pad = (n) => String(n).padStart(2, '0');\n  return `${year}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:00+07:00`;\n}\n\nconst interaction = $('Verify Signature').first().json.interaction;\nconst data = interaction.data || {};\nconst name = data.name || '';\nconst actionMap = { ferment_start: 'start', ferment_stop: 'stop', ferment_status: 'status', ferment_set_temp: 'set_temp', ferment_recipes: 'recipes', ferment_band: 'band', ferment_event: 'event' };\nconst action = actionMap[name] || 'unknown';\n\nconst params = {};\n(data.options || []).forEach(opt => { params[opt.name] = opt.value; });\n\nconst requestedBy = (interaction.member && interaction.member.user && interaction.member.user.username)\n  || (interaction.user && interaction.user.username)\n  || 'unknown';\n\nreturn [{\n  json: {\n    action,\n    pill: params.pill,\n    beer: params.beer,\n    start_date: parseStartDate(params.date),\n    target_temp: params.target,\n    remark: params.remark ? params.remark.replace(/,/g, '，') : null,\n    recipe: params.recipe || null,\n    search: params.search || null,\n    band_low: params.low != null ? Number(params.low) : null,\n    band_high: params.high != null ? Number(params.high) : null,\n    band_clear: params.clear === true,\n    event_type: params.type || null,\n    // comma ใน note ทำให้ Postgres queryReplacement (คั่นด้วย comma) เพี้ยน — แทนด้วยตัวเต็มความกว้าง\n    // บทเรียนเดียวกับ remark ด้านบน\n    event_note: params.note ? String(params.note).replace(/,/g, '，') : null,\n    event_at: parseEventDate(params.date).iso,\n    event_date_ok: parseEventDate(params.date).ok,\n    event_date_raw: params.date || null,\n    requested_by: requestedBy,\n    application_id: interaction.application_id,\n    interaction_token: interaction.token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1417,6 +1417,76 @@
       ],
       "id": "ba9d0000-0000-4000-8000-000000000403",
       "name": "Is Band?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ev000000-1111-4222-8333-444444444444",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "event",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2676,
+        1600
+      ],
+      "id": "ev000001-0000-4000-8000-000000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- บันทึก/ยกเลิกเหตุการณ์ในคำสั่งเดียว แยกด้วย $2 เพื่อไม่ต้องแตกสาย IF เพิ่มอีก\n-- ตรวจทุกอย่างใน SQL ชั้นเดียว: หา batch ที่ active ของ Pill นี้, กันวันอนาคต,\n-- กันวันก่อนเริ่มหมัก แล้วคืนสถานะกลับไปให้ Code node ประกอบข้อความ\nWITH target AS (\n  SELECT b.batch_id, b.beer_name, b.start_date\n  FROM batches b\n  JOIN devices d ON d.device_id = b.pill_device_id\n  WHERE trim(d.device_name) = trim($1) AND d.device_type = 'pill' AND b.status = 'active'\n  ORDER BY b.start_date DESC, b.batch_id DESC\n  LIMIT 1\n),\nchk AS (\n  SELECT t.*, $3::timestamptz AS at,\n    CASE\n      WHEN $2 = 'undo' THEN 'undo'\n      WHEN $4 = 'false' THEN 'bad_date'\n      WHEN $3::timestamptz > now() THEN 'future'\n      WHEN $3::timestamptz < t.start_date THEN 'before_start'\n      ELSE 'ok'\n    END AS verdict\n  FROM target t\n),\nremoved AS (\n  DELETE FROM batch_events e USING chk\n  WHERE chk.verdict = 'undo' AND e.batch_id = chk.batch_id\n    AND e.event_id = (SELECT max(event_id) FROM batch_events x WHERE x.batch_id = chk.batch_id)\n  RETURNING e.event_type, e.occurred_at\n),\nadded AS (\n  INSERT INTO batch_events (batch_id, event_type, occurred_at, note, created_by)\n  SELECT chk.batch_id, $2, chk.at, NULLIF($5, 'null'), $6 FROM chk WHERE chk.verdict = 'ok'\n  RETURNING event_type, occurred_at\n)\nSELECT\n  (SELECT batch_id FROM chk)   AS batch_id,\n  (SELECT beer_name FROM chk)  AS beer_name,\n  to_char((SELECT start_date FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS start_text,\n  COALESCE((SELECT verdict FROM chk), 'no_batch') AS verdict,\n  $2::text AS requested_type,\n  to_char((SELECT at FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS at_text,\n  (SELECT EXTRACT(EPOCH FROM (now() - at))/3600 FROM chk) AS hours_ago,\n  (SELECT event_type FROM removed) AS removed_type,\n  to_char((SELECT occurred_at FROM removed) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS removed_at_text,\n  (SELECT count(*) FROM added) AS added_count,\n  (SELECT jsonb_agg(jsonb_build_object(\n      'at', to_char(e.occurred_at AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI'),\n      'type', e.event_type, 'note', e.note) ORDER BY e.occurred_at)\n   FROM batch_events e WHERE e.batch_id = (SELECT batch_id FROM chk)) AS timeline;",
+        "options": {
+          "queryReplacement": "={{$json.pill}}, {{$json.event_type}}, {{$json.event_at}}, {{$json.event_date_ok}}, {{$json.event_note}}, {{$json.requested_by}}"
+        }
+      },
+      "name": "Save Batch Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2900,
+        1600
+      ],
+      "id": "ev000002-0000-4000-8000-000000000002",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ประกอบข้อความตอบกลับของ /ferment_event — ทุกเส้นทางต้องตอบอะไรสักอย่างเสมอ\n// ถ้าเงียบผู้ใช้จะไม่รู้ว่าบันทึกติดหรือไม่ แล้วไปกดซ้ำ\nconst LABEL = { dry_hop: '🌿 Dry hop', pitch: '🧫 ลงยีสต์', transfer: '🔄 ถ่ายถัง',\n                sample: '🧪 เก็บตัวอย่าง', other: '📝 อื่นๆ', undo: '↩️ ยกเลิกรายการล่าสุด' };\nconst d = $input.first().json;\nconst raw = $('Parse Interaction Command').first().json;\nconst nameOf = (t) => LABEL[t] || t || '-';\n\nlet content;\nif (d.verdict === 'no_batch') {\n  content = '❌ ไม่พบ batch ที่กำลังหมักอยู่ของ ' + (raw.pill || '-');\n} else if (d.verdict === 'bad_date') {\n  content = '⚠️ อ่านวันที่ \"' + (raw.event_date_raw || '') + '\" ไม่ออก\\n'\n    + 'ใช้รูปแบบ d/m/yyyy HH:mm เช่น 9/9/2026 18:00 (ไม่ใส่ = ใช้เวลาปัจจุบัน)';\n} else if (d.verdict === 'future') {\n  content = '⚠️ ' + d.at_text + ' อยู่ในอนาคต — ยังบันทึกไม่ได้';\n} else if (d.verdict === 'before_start') {\n  content = '⚠️ ' + d.at_text + ' อยู่ก่อนวันเริ่มหมัก (' + d.start_text + ') — เช็ควันอีกครั้ง';\n} else if (d.verdict === 'undo') {\n  content = d.removed_type\n    ? ('✅ ลบแล้ว — ' + nameOf(d.removed_type) + ' ' + d.removed_at_text)\n    : ('ℹ️ ไม่มีเหตุการณ์ให้ลบใน ' + (d.beer_name || 'batch นี้'));\n} else {\n  const ago = d.hours_ago != null ? Number(d.hours_ago) : null;\n  const agoText = ago == null ? '' :\n    (ago < 1 ? '  (เมื่อครู่)' : '  (' + ago.toFixed(1) + ' ชม.ที่แล้ว)');\n  content = '✅ บันทึกแล้ว — ' + (d.beer_name || '-') + '\\n\\n'\n    + nameOf(d.requested_type) + ' · ' + d.at_text + agoText\n    + (raw.event_note ? ('\\n' + String(raw.event_note).replace(/，/g, ',')) : '');\n}\n\n// โชว์ไทม์ไลน์ทุกครั้งที่มี batch จะได้เห็นทันทีว่าบันทึกผิดวันไหม ไม่ต้องมีคำสั่งดูรายการแยก\nlet tl = Array.isArray(d.timeline) ? d.timeline : [];\n// CTE ทั้งหมดในคำสั่งเดียวเห็น snapshot ก่อนการลบ ไทม์ไลน์ที่ได้กลับมาจึงยังมีรายการที่\n// เพิ่ง DELETE ไปด้วย — ตัดออกเองตรงนี้ ไม่งั้นผู้ใช้กด undo แล้วเห็นของเดิมอยู่ นึกว่าลบไม่ติด\nif (d.verdict === 'undo' && d.removed_type) {\n  const i = tl.findIndex(e => e.type === d.removed_type && e.at === d.removed_at_text);\n  if (i >= 0) tl = tl.slice(0, i).concat(tl.slice(i + 1));\n}\nif (d.verdict !== 'no_batch' && d.verdict !== 'bad_date') {\n  const lines = ['', 'ไทม์ไลน์ของ batch นี้', '  ' + d.start_text + '   เริ่มหมัก'];\n  tl.forEach(e => lines.push('  ' + e.at + '   ' + nameOf(e.type)\n    + (e.note ? (' — ' + String(e.note).replace(/，/g, ',')) : '')));\n  if (!tl.length) lines.push('  (ยังไม่มีเหตุการณ์อื่น)');\n  content += '\\n' + lines.join('\\n');\n}\nreturn [{ json: { content: content.slice(0, 1900) } }];"
+      },
+      "name": "Build Event Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3124,
+        1600
+      ],
+      "id": "ev000003-0000-4000-8000-000000000003"
     }
   ],
   "connections": {
@@ -2092,7 +2162,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Is Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Set Beer Band": {
@@ -2107,6 +2183,40 @@
       ]
     },
     "Build Band Message": {
+      "main": [
+        [
+          {
+            "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Event?": {
+      "main": [
+        [
+          {
+            "node": "Save Batch Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Save Batch Event": {
+      "main": [
+        [
+          {
+            "node": "Build Event Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Event Message": {
       "main": [
         [
           {

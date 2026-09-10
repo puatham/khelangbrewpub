@@ -610,5 +610,36 @@
       },
       "timeFrom": "$range"
     }
-  ]
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "เหตุการณ์ที่ทำจริง",
+        "enable": true,
+        "hide": false,
+        "iconColor": "#73BF69",
+        "datasource": {
+          "type": "postgres",
+          "uid": "rapt-pg"
+        },
+        "target": {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT occurred_at AS time,\n       CASE event_type WHEN 'dry_hop' THEN '🌿 Dry hop' WHEN 'pitch' THEN '🧫 ลงยีสต์'\n            WHEN 'transfer' THEN '🔄 ถ่ายถัง' WHEN 'sample' THEN '🧪 เก็บตัวอย่าง'\n            ELSE '📝 ' || event_type END\n         || COALESCE(' — ' || replace(note, '，', ','), '') AS text,\n       event_type AS tags\nFROM batch_events\nWHERE batch_id = (SELECT batch_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY 1"
+        }
+      }
+    ]
+  }
 }

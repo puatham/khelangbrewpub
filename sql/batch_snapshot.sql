@@ -65,7 +65,9 @@ RETURNS TABLE (
   fallback_gap_points        bigint,
   fallback_gap_sd            numeric,
   stable_gap_c               numeric,
-  stable_gap_points          bigint
+  stable_gap_points          bigint,
+  -- เหตุการณ์ที่ทำจริง (dry hop / ลงยีสต์ / ถ่ายถัง) ต่างจาก dry_hop_plan ที่เป็นแค่แผนในสูตร
+  batch_events               jsonb
 )
 LANGUAGE sql
 STABLE
@@ -96,6 +98,13 @@ controller_series AS (
   SELECT jsonb_agg(jsonb_build_object('t', time_utc, 'temp', temperature_c, 'target', target_temperature_c) ORDER BY time_utc ASC) AS series
   FROM temp_controller_readings, b
   WHERE device_id = b.temp_controller_device_id AND time_utc >= b.start_date AND time_utc <= p_as_of
+),
+events AS (
+  -- ตัด <= p_as_of เหมือนซีรีส์อื่น เพื่อให้ Backtest เล่นย้อนหลังแล้วไม่เห็นอนาคต
+  SELECT jsonb_agg(jsonb_build_object('t', e.occurred_at, 'type', e.event_type, 'note', e.note)
+                   ORDER BY e.occurred_at ASC) AS series
+  FROM batch_events e, b
+  WHERE e.batch_id = b.batch_id AND e.occurred_at <= p_as_of
 ),
 control_series AS (
   SELECT jsonb_agg(jsonb_build_object('t', changed_at, 'old', old_value, 'new', new_value, 'by', changed_by, 'remark', remark) ORDER BY changed_at ASC) AS series
@@ -215,7 +224,8 @@ SELECT
   sc.pill_stale_hours, sc.pill_last_at,
   lb.battery_percent AS pill_battery_percent,
   fg.gap AS fallback_gap_c, fg.n_points AS fallback_gap_points, fg.gap_sd AS fallback_gap_sd,
-  gc.avg_gap AS stable_gap_c, gc.n_points AS stable_gap_points
+  gc.avg_gap AS stable_gap_c, gc.n_points AS stable_gap_points,
+  COALESCE(ev.series, '[]'::jsonb) AS batch_events
 FROM b
 LEFT JOIN pill_series       ps  ON true
 LEFT JOIN controller_series cs  ON true
@@ -224,5 +234,6 @@ LEFT JOIN recipe_info       ri  ON true
 LEFT JOIN stale_calc        sc  ON true
 LEFT JOIN last_battery      lb  ON true
 LEFT JOIN fallback_gap      fg  ON true
-LEFT JOIN gap_calc          gc  ON true;
+LEFT JOIN gap_calc          gc  ON true
+LEFT JOIN events            ev  ON true;
 $fn$;

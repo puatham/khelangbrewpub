@@ -140,6 +140,22 @@ CREATE TABLE phase_log (
 -- control_log: audit การสั่งปรับค่า (เช่น SetTargetTemperature) จาก
 -- Discord หรือเว็บในอนาคต
 -- ---------------------------------------------------------------------
+-- เหตุการณ์ที่ "เกิดขึ้นจริง" ของ batch (เพิ่ม 10 ก.ย.) — ต่างจากแผนในสูตรที่บอกแค่
+-- ว่าตั้งใจจะทำวันไหน ตัวเลข Day ในสูตร Brewfather เป็นค่าประมาณของคนเขียน ใช้ตัดสิน
+-- อะไรไม่ได้ ตารางนี้เก็บว่าทำจริงเมื่อไหร่
+-- มีเพราะกฎ hop creep เขียนว่า "ถ้าเพิ่ง dry hop ไปไม่นาน ให้เฝ้า gravity ต่อ" แต่ระบบ
+-- ไม่มีทางรู้ว่า "เพิ่ง" หรือเปล่า กฎจึงแทบไม่มีผลจนกว่าจะมีข้อมูลนี้
+CREATE TABLE batch_events (
+  event_id    SERIAL PRIMARY KEY,
+  batch_id    INTEGER NOT NULL REFERENCES batches(batch_id),
+  event_type  TEXT NOT NULL,          -- dry_hop | pitch | transfer | sample | other
+  occurred_at TIMESTAMPTZ NOT NULL,   -- เวลาที่เกิดจริง ไม่ใช่เวลาที่พิมพ์คำสั่ง
+  note        TEXT,
+  created_by  TEXT,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_batch_events_batch_time ON batch_events (batch_id, occurred_at DESC);
+
 CREATE TABLE control_log (
   log_id SERIAL PRIMARY KEY,
   device_id UUID REFERENCES devices(device_id),
