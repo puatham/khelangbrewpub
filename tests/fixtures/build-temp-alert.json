@@ -68,7 +68,7 @@
         }
       ],
       "expect": {
-        "button_target_c": 16.1,
+        "button_target_c": 16.09,
         "embeds.0.title": "~ไต่ขึ้น",
         "embeds.0.footer.text": "~!แจ้งซ้ำ",
         "embeds.0.description": "~เสนอปรับ target"
@@ -103,12 +103,12 @@
         }
       ],
       "expect": {
-        "button_target_c": 16.1,
+        "button_target_c": 16.08,
         "embeds.0.footer.text": "~แจ้งซ้ำจากโหมดแจ้งทุกรอบ"
       }
     },
     {
-      "name": "band_low — เล็งกลางช่วง 18.25 จาก 17.88 ได้ปุ่ม 16.57 (เคสจริง 10 ก.ย.)",
+      "name": "band_low เคสจริง 10 ก.ย. — แก้ทีละส่วน ได้ 16.44 แทน 16.57 เต็มระยะ",
       "input": [
         {
           "batch_id": 4,
@@ -136,7 +136,7 @@
         }
       ],
       "expect": {
-        "button_target_c": 16.57,
+        "button_target_c": 16.44,
         "embeds.0.title": "~หลุดช่วงที่ตั้งไว้",
         "embeds.0.description": "~ยังอยู่ในช่วงที่ยีสต์รองรับ"
       }
@@ -170,7 +170,7 @@
         }
       ],
       "expect": {
-        "button_target_c": 16.5,
+        "button_target_c": 16.52,
         "embeds.0.title": "~ไหลลง"
       }
     },
@@ -398,7 +398,7 @@
       }
     },
     {
-      "name": "ครบ 1.5 ชม.พอดี — เสนอได้แล้ว",
+      "name": "ขาขึ้นผ่านไป 1.5 ชม. — ยังห้าม เพราะตู้อุ่นช้า ต้องรอ 3 ชม.",
       "input": [
         {
           "batch_id": 4,
@@ -426,7 +426,144 @@
         }
       ],
       "expect": {
-        "button_target_c": 16.57
+        "button_target_c": null,
+        "embeds.0.description": [
+          "~ยังไม่ครบ 3.0 ชม.",
+          "~ตู้อุ่นช้ากว่าเย็นราว 5 เท่า"
+        ]
+      }
+    },
+    {
+      "name": "ขาขึ้นครบ 3 ชม. — เสนอได้",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 3.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": 16.44
+      }
+    },
+    {
+      "name": "เบียร์กำลังไต่กลับเข้าช่วงเองแล้ว — ห้ามเสนอปุ่มซ้ำ",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.9,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 5.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.15,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": null,
+        "embeds.0.description": [
+          "~กำลังกลับเข้าที่เองอยู่แล้ว",
+          "~การสั่งเพิ่มตอนนี้จะเลยเป้า"
+        ]
+      }
+    },
+    {
+      "name": "ไต่กลับช้ามาก (ETA 17.5 ชม.) — damping ทำให้ตกต่ำกว่าขั้นต่ำ ต้องเสนอขั้นต่ำแทนการเงียบ",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.9,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 5.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": 16.4
+      }
+    },
+    {
+      "name": "drifting_low ที่เคลื่อนเข้าหากลางช่วง — ห้ามนับว่า \"กำลังเข้าที่เอง\"",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "drifting_low",
+          "current_phase": "high_krausen",
+          "pill_c": 18.4,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 5.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.1,
+          "hours_to_floor": 0.5,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": 16.5,
+        "embeds.0.description": "~!กำลังกลับเข้าที่เอง"
       }
     }
   ]
