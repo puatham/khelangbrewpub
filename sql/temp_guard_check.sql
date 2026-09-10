@@ -36,7 +36,10 @@ RETURNS TABLE (
   floor_c        numeric,
   ceil_c         numeric,
   dry_hop_age_h  numeric,
-  is_fresh_alert boolean
+  is_fresh_alert boolean,
+  -- ให้ Build Temp Alert แปะลิงก์กราฟ Grafana ตรงเข้า Pill ตัวนี้ได้ (var-pill) โดยไม่ต้อง
+  -- ไป join batches ซ้ำอีกรอบใน n8n
+  pill_device_id uuid
 )
 LANGUAGE sql
 VOLATILE
@@ -201,7 +204,8 @@ SELECT d.batch_id, d.beer_name, COALESCE(d.kind, 'ok') AS alert_kind, d.current_
        -- แถวนี้ผ่าน dedupe มาจริง หรือถูกกลืนแล้วโผล่มาเพราะโหมดแจ้งทุกรอบ
        -- Build Temp Alert ใช้แยก "เตือนครั้งแรก" ออกจาก "แจ้งซ้ำ" จะได้ไม่อ่านเหมือน
        -- มีเหตุใหม่เกิดซ้ำทุก 15 นาที
-       (s.batch_id IS NOT NULL) AS is_fresh_alert
+       (s.batch_id IS NOT NULL) AS is_fresh_alert,
+       d.pill_device_id
 FROM decided d
 -- โหมด 'alerts' (ค่าตั้งต้น): ออกเฉพาะแถวผิดปกติที่ผ่าน dedupe
 -- โหมด 'always': ออกทุกแถวเสมอ ทั้งปกติและผิดปกติ โดยไม่ให้ dedupe กรองออก

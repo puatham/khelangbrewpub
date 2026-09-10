@@ -62,6 +62,9 @@ services:
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY}
       - BREWFATHER_USER_ID=${BREWFATHER_USER_ID}
       - BREWFATHER_API_KEY=${BREWFATHER_API_KEY}
+      # ให้ Build Temp Alert แปะลิงก์กราฟ Grafana ในข้อความเตือนได้ — ไม่ใช่ secret
+      # (โดเมนเดียวกับที่ตั้งไว้ให้ traefik/grafana ด้านล่าง) แค่ยังไม่เคยส่งเข้า n8n มาก่อน
+      - GRAFANA_HOST=${GRAFANA_HOST}
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /local-files:/files

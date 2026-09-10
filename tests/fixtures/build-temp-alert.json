@@ -605,6 +605,118 @@
           "~ขวดระเบิด"
         ]
       }
+    },
+    {
+      "name": "มี pill_device_id + GRAFANA_HOST — ต้องได้ dashboard_url และปุ่มลิงก์กราฟ",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "ok",
+          "current_phase": "high_krausen",
+          "pill_c": 18.31,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.0,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.029,
+          "hours_to_floor": null,
+          "hours_to_ceil": 6.5,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false,
+          "pill_device_id": "29b512a1-55ef-4460-ad6e-16cdbe4af4cc"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "alert_kind": "ok",
+        "button_target_c": null,
+        "embeds.0.title": "✅ ปกติ — Hazy DIPA",
+        "embeds.0.footer.text": "~!แจ้งซ้ำ",
+        "embeds.0.description": "~18.31°C",
+        "dashboard_url": "https://grafana.khelangbrew.tech/d/ferment-main/x?viewPanel=1&var-pill=29b512a1-55ef-4460-ad6e-16cdbe4af4cc"
+      },
+      "env": {
+        "GRAFANA_HOST": "grafana.khelangbrew.tech"
+      }
+    },
+    {
+      "name": "ไม่ได้ตั้ง GRAFANA_HOST — dashboard_url ต้องเป็น null ไม่ใช่ throw",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "ok",
+          "current_phase": "high_krausen",
+          "pill_c": 18.31,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.0,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.029,
+          "hours_to_floor": null,
+          "hours_to_ceil": 6.5,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false,
+          "pill_device_id": "29b512a1-55ef-4460-ad6e-16cdbe4af4cc"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "dashboard_url": null
+      }
+    },
+    {
+      "name": "ไม่มี pill_device_id (batch เก่าไม่ครบข้อมูล) — dashboard_url เป็น null",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "ok",
+          "current_phase": "high_krausen",
+          "pill_c": 18.31,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.0,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.029,
+          "hours_to_floor": null,
+          "hours_to_ceil": 6.5,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "dashboard_url": null
+      },
+      "env": {
+        "GRAFANA_HOST": "grafana.khelangbrew.tech"
+      }
     }
   ]
 }

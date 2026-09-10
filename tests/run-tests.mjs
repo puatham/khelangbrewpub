@@ -30,7 +30,7 @@ function loadNodeCode(workflowName, nodeName) {
 // จำลองสภาพแวดล้อมที่ n8n ให้ Code node — $input.all() กับ $('ชื่อ node')
 // itemMatching(i) คือตัวที่ n8n ใช้จับคู่ item ข้าม node ต้องมีให้ครบ ไม่งั้นโค้ดที่
 // พึ่งมันจะพังคนละแบบกับของจริง
-function runNode(code, { input = [], context = {} }) {
+function runNode(code, { input = [], context = {}, env = {} }) {
   const wrap = (rows) => rows.map((json) => ({ json }));
   const $input = {
     all: () => wrap(input),
@@ -49,8 +49,10 @@ function runNode(code, { input = [], context = {} }) {
       }
     };
   };
-  const fn = new Function('$input', '$', '$now', 'DateTime', code);
-  return fn($input, $, new Date(), null);
+  // n8n มี $env ให้เสมอในทุก Code node — ค่าเริ่มต้น {} จำลอง "ไม่ได้ตั้ง env var นี้ไว้"
+  // (อ่านคีย์ที่ไม่มีได้ค่า undefined เหมือนของจริง ไม่ throw)
+  const fn = new Function('$input', '$', '$env', '$now', 'DateTime', code);
+  return fn($input, $, env, new Date(), null);
 }
 
 // เทียบเฉพาะ key ที่ fixture ระบุไว้ — ไม่ต้องเขียน output ทั้งก้อนซึ่งยาวและเปราะ
