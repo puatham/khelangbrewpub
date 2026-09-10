@@ -57,10 +57,17 @@ function runNode(code, { input = [], context = {} }) {
 // รองรับ path แบบ "embeds.0.title" และค่าที่ขึ้นต้นด้วย ~ = "ต้องมีข้อความนี้อยู่ข้างใน"
 function checkExpectations(actual, expect) {
   const errs = [];
-  for (const [path, want] of Object.entries(expect)) {
+  for (const [path, wants] of Object.entries(expect)) {
+    // รับได้ทั้งค่าเดียวและ array ของหลายเงื่อนไขบน path เดียวกัน — ถ้าไม่มี array
+    // จะเขียนคีย์ซ้ำใน JSON แล้วเช็คตัวแรกหายเงียบโดยไม่มีอะไรบอก
+    for (const want of Array.isArray(wants) ? wants : [wants]) {
     let got = actual;
     for (const part of path.split('.')) got = got?.[part];
-    if (typeof want === 'string' && want.startsWith('~')) {
+    // "ไม่มีคีย์นี้" ต่างจาก "คีย์นี้เป็น null" — บาง guard ตั้งค่าเป็น null ตั้งใจ
+    // ส่วนบางเคสคือต้องไม่แตะเลย ถ้าเทียบรวมกันจะเขียนเทสที่หลอกตัวเองได้
+    if (want === '__absent__') {
+      if (got !== undefined) errs.push(`${path}: ต้องไม่มีค่า แต่ได้ ${JSON.stringify(got)}`);
+    } else if (typeof want === 'string' && want.startsWith('~')) {
       const needle = want.slice(1);
       const hay = String(got ?? '');
       if (needle.startsWith('!')) {
@@ -71,6 +78,7 @@ function checkExpectations(actual, expect) {
       }
     } else if (JSON.stringify(got) !== JSON.stringify(want)) {
       errs.push(`${path}: ต้องการ ${JSON.stringify(want)} แต่ได้ ${JSON.stringify(got)}`);
+    }
     }
   }
   return errs;

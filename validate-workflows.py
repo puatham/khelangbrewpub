@@ -83,6 +83,20 @@ def check_js(wf_name, node_name, code):
         os.unlink(tmp)
 
 
+def check_node_refs(wf_name, node_name, code_or_expr, known_nodes, where):
+    """$('ชื่อ node') ต้องชี้ไป node ที่มีอยู่จริงในไฟล์เดียวกัน
+
+    n8n ผูก node ด้วย "ชื่อ" ไม่ใช่ id — เปลี่ยนชื่อ node แล้วลืมแก้ที่อ้างถึง จะไม่มีอะไร
+    เตือนเลยจนกว่าจะรันจริงแล้วเจอ "Referenced node is unexecuted" กลางทาง
+    """
+    for m in re.finditer(r"\$\(\s*'([^']+)'\s*\)|\$\(\s*\"([^\"]+)\"\s*\)", code_or_expr):
+        ref = m.group(1) or m.group(2)
+        if ref not in known_nodes:
+            close = [n for n in known_nodes if n.lower().replace(' ', '') == ref.lower().replace(' ', '')]
+            hint = f' — ใกล้เคียง: "{close[0]}"' if close else ''
+            fail(wf_name, node_name, f'อ้างถึง node ที่ไม่มีอยู่: $(\'{ref}\') ใน {where}{hint}')
+
+
 def check_query_params(wf_name, node_name, params):
     """$n ใน query ต้องมีค่าป้อนครบ ไม่งั้น Postgres ตีกลับตอนรัน
     (เกินก็ไม่ได้ — "bind message supplies N parameters, but ... requires M")"""
@@ -141,12 +155,27 @@ def main():
                 fail(name, '-', 'ไม่ได้ตั้ง errorWorkflow',
                      'workflow ที่รันเองต้องมี ไม่งั้นพังแล้วเงียบ (เจอจริง 8 ก.ย.)')
 
+        known = {n['name'] for n in wf['nodes']}
         for node in wf['nodes']:
             params = node.get('parameters', {})
             walk(name, node['name'], params)
             if params.get('jsCode'):
                 check_js(name, node['name'], params['jsCode'])
+                check_node_refs(name, node['name'], params['jsCode'], known, 'jsCode')
             check_query_params(name, node['name'], params)
+            # expression ก็อ้าง node ด้วยไวยากรณ์เดียวกันได้ เช่น {{ $('Get RAPT Token').first() }}
+            # ตัด jsCode ออกก่อน ไม่งั้นรายงานซ้ำกับรอบบน
+            others = {k: v for k, v in params.items() if k != 'jsCode'}
+            check_node_refs(name, node['name'], json.dumps(others, ensure_ascii=False), known, 'expression')
+
+        # สายที่ต่อไว้ใน connections ต้องชี้ไป node ที่มีจริงเช่นกัน
+        for src, conn in (wf.get('connections') or {}).items():
+            if src not in known:
+                fail(name, '-', f'connections มีสายออกจาก node ที่ไม่มีอยู่: "{src}"')
+            for branch in conn.get('main', []) or []:
+                for link in branch or []:
+                    if link.get('node') not in known:
+                        fail(name, src, f'สายชี้ไป node ที่ไม่มีอยู่: "{link.get("node")}"')
 
     if problems:
         print(f'❌ เจอปัญหา {len(problems)} จุด\n')

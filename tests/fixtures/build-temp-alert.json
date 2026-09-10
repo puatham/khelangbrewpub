@@ -4,14 +4,32 @@
   "cases": [
     {
       "name": "ok — ปกติ ไม่มีปุ่ม ไม่มีป้ายแจ้งซ้ำ",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "ok", "current_phase": "high_krausen",
-        "pill_c": 18.31, "ctrl_c": 16.3, "target_c": 16.3, "ctrl_dev_c": 0.0,
-        "pill_move_1h_c": 0.0, "tgt_stable_h": 15.0, "pill_age_h": 0.3, "ctrl_age_h": 0.2,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": 0.029, "hours_to_floor": null, "hours_to_ceil": 6.5,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": false
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "ok",
+          "current_phase": "high_krausen",
+          "pill_c": 18.31,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.0,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.029,
+          "hours_to_floor": null,
+          "hours_to_ceil": 6.5,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false
+        }
+      ],
       "expectCount": 1,
       "expect": {
         "alert_kind": "ok",
@@ -23,14 +41,32 @@
     },
     {
       "name": "drifting_high ครั้งแรก — มีปุ่มลด target ไม่มีป้ายแจ้งซ้ำ",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "drifting_high", "current_phase": "high_krausen",
-        "pill_c": 18.42, "ctrl_c": 16.3, "target_c": 16.3, "ctrl_dev_c": 0.0,
-        "pill_move_1h_c": 0.12, "tgt_stable_h": 15.0, "pill_age_h": 0.3, "ctrl_age_h": 0.2,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": 0.12, "hours_to_floor": null, "hours_to_ceil": 0.7,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "drifting_high",
+          "current_phase": "high_krausen",
+          "pill_c": 18.42,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.12,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.12,
+          "hours_to_floor": null,
+          "hours_to_ceil": 0.7,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": 16.1,
         "embeds.0.title": "~ไต่ขึ้น",
@@ -40,14 +76,32 @@
     },
     {
       "name": "drifting_high ซ้ำ — ปุ่มเหมือนเดิม แต่ติดป้ายแจ้งซ้ำ",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "drifting_high", "current_phase": "high_krausen",
-        "pill_c": 18.44, "ctrl_c": 16.3, "target_c": 16.3, "ctrl_dev_c": 0.0,
-        "pill_move_1h_c": 0.12, "tgt_stable_h": 15.0, "pill_age_h": 0.3, "ctrl_age_h": 0.2,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": 0.12, "hours_to_floor": null, "hours_to_ceil": 0.5,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": false
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "drifting_high",
+          "current_phase": "high_krausen",
+          "pill_c": 18.44,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.12,
+          "tgt_stable_h": 15.0,
+          "pill_age_h": 0.3,
+          "ctrl_age_h": 0.2,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.12,
+          "hours_to_floor": null,
+          "hours_to_ceil": 0.5,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false
+        }
+      ],
       "expect": {
         "button_target_c": 16.1,
         "embeds.0.footer.text": "~แจ้งซ้ำจากโหมดแจ้งทุกรอบ"
@@ -55,14 +109,32 @@
     },
     {
       "name": "band_low — เล็งกลางช่วง 18.25 จาก 17.88 ได้ปุ่ม 16.57 (เคสจริง 10 ก.ย.)",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "band_low", "current_phase": "slowing_ferment",
-        "pill_c": 17.88, "ctrl_c": 16.11, "target_c": 16.2, "ctrl_dev_c": 0.09,
-        "pill_move_1h_c": 0.06, "tgt_stable_h": 14.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": -0.02, "hours_to_floor": 0, "hours_to_ceil": null,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 14.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": 16.57,
         "embeds.0.title": "~หลุดช่วงที่ตั้งไว้",
@@ -71,14 +143,32 @@
     },
     {
       "name": "ปัดเศษ 0.19999... ต้องยังได้ปุ่ม (บั๊กจริง 8 ก.ย.)",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "drifting_low", "current_phase": "high_krausen",
-        "pill_c": 18.06, "ctrl_c": 16.3, "target_c": 16.3, "ctrl_dev_c": 0.0,
-        "pill_move_1h_c": 0.06, "tgt_stable_h": 4.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": -0.121, "hours_to_floor": 0.5, "hours_to_ceil": null,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "drifting_low",
+          "current_phase": "high_krausen",
+          "pill_c": 18.06,
+          "ctrl_c": 16.3,
+          "target_c": 16.3,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 4.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.121,
+          "hours_to_floor": 0.5,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": 16.5,
         "embeds.0.title": "~ไหลลง"
@@ -86,14 +176,32 @@
     },
     {
       "name": "ตู้ยังไล่ไม่ถึง target — ห้ามเสนอปุ่ม ต้องบอกให้รอ",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "band_low", "current_phase": "slowing_ferment",
-        "pill_c": 17.8, "ctrl_c": 15.5, "target_c": 16.5, "ctrl_dev_c": 1.0,
-        "pill_move_1h_c": 0.05, "tgt_stable_h": 1.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": -0.03, "hours_to_floor": 0, "hours_to_ceil": null,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.8,
+          "ctrl_c": 15.5,
+          "target_c": 16.5,
+          "ctrl_dev_c": 1.0,
+          "pill_move_1h_c": 0.05,
+          "tgt_stable_h": 1.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.03,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": null,
         "embeds.0.description": "~ยังไล่ไม่ถึง target"
@@ -101,14 +209,32 @@
     },
     {
       "name": "sensor_stale — ไม่เสนอปุ่ม เพราะค่าที่ใช้คิดเชื่อไม่ได้",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "sensor_stale", "current_phase": "slowing_ferment",
-        "pill_c": 17.88, "ctrl_c": 16.2, "target_c": 16.2, "ctrl_dev_c": 0.0,
-        "pill_move_1h_c": null, "tgt_stable_h": 14.0, "pill_age_h": 12.6, "ctrl_age_h": 0.1,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": null, "hours_to_floor": null, "hours_to_ceil": null,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "sensor_stale",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.2,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": null,
+          "tgt_stable_h": 14.0,
+          "pill_age_h": 12.6,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": null,
+          "hours_to_floor": null,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": null,
         "embeds.0.title": "~เซ็นเซอร์เงียบ",
@@ -117,14 +243,32 @@
     },
     {
       "name": "controller_lag — ต้องห้ามปรับ target เพราะปัญหาไม่ได้อยู่ที่ค่าที่ตั้ง",
-      "input": [{
-        "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "controller_lag", "current_phase": "slowing_ferment",
-        "pill_c": 19.5, "ctrl_c": 19.2, "target_c": 16.2, "ctrl_dev_c": 3.0,
-        "pill_move_1h_c": 0.1, "tgt_stable_h": 8.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-        "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-        "rate_c_per_h": 0.05, "hours_to_floor": null, "hours_to_ceil": null,
-        "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": true
-      }],
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "controller_lag",
+          "current_phase": "slowing_ferment",
+          "pill_c": 19.5,
+          "ctrl_c": 19.2,
+          "target_c": 16.2,
+          "ctrl_dev_c": 3.0,
+          "pill_move_1h_c": 0.1,
+          "tgt_stable_h": 8.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.05,
+          "hours_to_floor": null,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
       "expect": {
         "button_target_c": null,
         "embeds.0.description": "~อย่าเพิ่งปรับ target"
@@ -134,18 +278,48 @@
       "name": "หลาย batch พร้อมกัน — ต้องคืนครบทุกใบ ไม่ใช่แค่ใบแรก",
       "input": [
         {
-          "batch_id": 4, "beer_name": "Hazy DIPA", "alert_kind": "ok", "current_phase": "slowing_ferment",
-          "pill_c": 18.2, "ctrl_c": 16.2, "target_c": 16.2, "ctrl_dev_c": 0.0,
-          "pill_move_1h_c": 0.02, "tgt_stable_h": 14.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-          "yeast_min": 18, "yeast_max": 25, "band_low": 18, "band_high": 18.5,
-          "rate_c_per_h": 0.01, "floor_c": 18.0, "ceil_c": 18.5, "is_fresh_alert": false
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "ok",
+          "current_phase": "slowing_ferment",
+          "pill_c": 18.2,
+          "ctrl_c": 16.2,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.02,
+          "tgt_stable_h": 14.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": 0.01,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": false
         },
         {
-          "batch_id": 5, "beer_name": "Weizen", "alert_kind": "ok", "current_phase": "lag",
-          "pill_c": 19.0, "ctrl_c": 18.5, "target_c": 18.5, "ctrl_dev_c": 0.0,
-          "pill_move_1h_c": 0.01, "tgt_stable_h": 3.0, "pill_age_h": 0.2, "ctrl_age_h": 0.1,
-          "yeast_min": 18, "yeast_max": 24, "band_low": null, "band_high": null,
-          "rate_c_per_h": 0.0, "floor_c": null, "ceil_c": null, "is_fresh_alert": false
+          "batch_id": 5,
+          "beer_name": "Weizen",
+          "alert_kind": "ok",
+          "current_phase": "lag",
+          "pill_c": 19.0,
+          "ctrl_c": 18.5,
+          "target_c": 18.5,
+          "ctrl_dev_c": 0.0,
+          "pill_move_1h_c": 0.01,
+          "tgt_stable_h": 3.0,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 24,
+          "band_low": null,
+          "band_high": null,
+          "rate_c_per_h": 0.0,
+          "floor_c": null,
+          "ceil_c": null,
+          "is_fresh_alert": false
         }
       ],
       "expectCount": 2,
@@ -153,6 +327,106 @@
       "expect": {
         "batch_id": 5,
         "embeds.0.title": "✅ ปกติ — Weizen"
+      }
+    },
+    {
+      "name": "เพิ่งตั้ง target ไป 0.3 ชม. — ห้ามเสนอปุ่มซ้ำ (บั๊กจริง 10 ก.ย.)",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 0.3,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": null,
+        "embeds.0.description": [
+          "~เพิ่งตั้ง 16.20°C ไปเมื่อ 0.3 ชม.ที่แล้ว",
+          "~การปรับซ้ำตอนนี้จะเกินเป้า"
+        ]
+      }
+    },
+    {
+      "name": "ผ่านไป 1.4 ชม. ยังไม่ครบเกณฑ์ — ยังห้าม",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 1.4,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": null
+      }
+    },
+    {
+      "name": "ครบ 1.5 ชม.พอดี — เสนอได้แล้ว",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "alert_kind": "band_low",
+          "current_phase": "slowing_ferment",
+          "pill_c": 17.88,
+          "ctrl_c": 16.11,
+          "target_c": 16.2,
+          "ctrl_dev_c": 0.09,
+          "pill_move_1h_c": 0.06,
+          "tgt_stable_h": 1.5,
+          "pill_age_h": 0.2,
+          "ctrl_age_h": 0.1,
+          "yeast_min": 18,
+          "yeast_max": 25,
+          "band_low": 18,
+          "band_high": 18.5,
+          "rate_c_per_h": -0.02,
+          "hours_to_floor": 0,
+          "hours_to_ceil": null,
+          "floor_c": 18.0,
+          "ceil_c": 18.5,
+          "is_fresh_alert": true
+        }
+      ],
+      "expect": {
+        "button_target_c": 16.57
       }
     }
   ]

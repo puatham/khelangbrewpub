@@ -1,0 +1,329 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Parse Final Verdict",
+  "cases": [
+    {
+      "name": "เห็นตรงกันตั้งแต่แรก ไม่มีข้อขัดแย้ง — ต้องไม่เพิ่มบล็อกอะไรเลย",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"agree\",\"final_phase\":\"slowing_ferment\",\"resolution_note\":null,\"accept_suggestion\":false}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "reasoning": "SG ยังลงต่อเนื่อง",
+            "should_send_prep_alert": false,
+            "has_dispute": false,
+            "brewmaster_phase_agrees": true,
+            "brewmaster_points_text": "",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "debate_stance": "agree",
+        "debate_revised": false,
+        "discord_embeds.0.fields": "__absent__"
+      }
+    },
+    {
+      "name": "ยอมรับข้อทักท้วง — ต้องเปลี่ยนเฟส ต่อเหตุผล และปิด prep alert",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"revise\",\"final_phase\":\"slowing_ferment\",\"resolution_note\":\"จุดใหม่หลัง Pill กลับมาแสดงว่า SG ยังลง กราฟที่แบนมาจากข้อมูลขาด\",\"accept_suggestion\":false}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "fg_stable",
+            "reasoning": "กราฟ SG แบนมา 14 ชม.",
+            "should_send_prep_alert": true,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": false,
+            "brewmaster_phase_doubt": "กราฟแบนเพราะเซ็นเซอร์เงียบ ไม่ใช่การหมักหยุด",
+            "brewmaster_points_text": "❓ สงสัยเรื่องเฟส: กราฟแบนเพราะเซ็นเซอร์เงียบ",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 3066993,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "debate_revised": true,
+        "debate_phase_before": "fg_stable",
+        "should_send_prep_alert": false,
+        "reasoning": "~[ทบทวนแล้วแก้จาก fg_stable]",
+        "discord_embeds.0.fields.0.name": "🤝 ข้อสรุปหลังทบทวน",
+        "discord_embeds.0.fields.0.value": [
+          "~แก้เฟสจาก fg_stable เป็น slowing_ferment",
+          "~!undefined"
+        ]
+      }
+    },
+    {
+      "name": "ยืนยันตามเดิม — เฟสไม่เปลี่ยน แต่ต้องบอกว่าถกกันแล้ว",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"stand\",\"final_phase\":\"high_krausen\",\"resolution_note\":\"ความชันช่วง 6 ชม.ล่าสุดยังเป็นจุดที่ชันที่สุดของทั้งเส้น ยังไม่ผ่อน\",\"accept_suggestion\":false}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "high_krausen",
+            "reasoning": "กราฟชันสุด",
+            "should_send_prep_alert": true,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": false,
+            "brewmaster_phase_doubt": "น่าจะผ่อนความชันแล้ว ควรเป็น slowing_ferment",
+            "brewmaster_points_text": "❓ สงสัยเรื่องเฟส: น่าจะผ่อนแล้ว",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 13849600,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "detected_phase": "high_krausen",
+        "debate_revised": false,
+        "should_send_prep_alert": true,
+        "discord_embeds.0.fields.0.name": "⚖️ ทบทวนแล้วยืนยันตามเดิม",
+        "discord_embeds.0.fields.0.value": "~เหตุผลที่ยังยืนตามเดิม"
+      }
+    },
+    {
+      "name": "ตอบ revise แต่ใส่เฟสเดิม — ไม่ใช่การเปลี่ยนใจ ห้ามนับว่าแก้แล้ว",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"revise\",\"final_phase\":\"slowing_ferment\",\"resolution_note\":\"รับทราบ\",\"accept_suggestion\":false}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "reasoning": "เดิม",
+            "should_send_prep_alert": true,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": true,
+            "brewmaster_points_text": "• ระวังอุณหภูมิ",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "debate_revised": false,
+        "should_send_prep_alert": true,
+        "reasoning": "เดิม"
+      }
+    },
+    {
+      "name": "ตอบเฟสที่ไม่มีอยู่จริง — ต้องไม่ยอมเปลี่ยนตาม",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"revise\",\"final_phase\":\"super_krausen\",\"resolution_note\":\"เปลี่ยนนะ\",\"accept_suggestion\":false}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "reasoning": "เดิม",
+            "should_send_prep_alert": true,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": false,
+            "brewmaster_phase_doubt": "สงสัย",
+            "brewmaster_points_text": "❓ สงสัย",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "debate_revised": false,
+        "should_send_prep_alert": true
+      }
+    },
+    {
+      "name": "อ่านคำตอบรอบโต้กลับไม่ได้ — ห้ามกลืนความเห็น Brew Master หาย ต้องบอกตรงๆ",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "ขอโทษครับ"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "slowing_ferment",
+            "reasoning": "เดิม",
+            "should_send_prep_alert": false,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": false,
+            "brewmaster_phase_doubt": "สงสัยเรื่องเฟส",
+            "brewmaster_points_text": "❓ สงสัยเรื่องเฟส: กราฟแบนเพราะข้อมูลขาด",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 15844367,
+                "description": "หลัก"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "detected_phase": "slowing_ferment",
+        "debate_stance": null,
+        "rebuttal_error": "~SyntaxError",
+        "discord_embeds.0.fields.0.name": "🍺 ความเห็น Brew Master",
+        "discord_embeds.0.fields.0.value": [
+          "~กราฟแบนเพราะข้อมูลขาด",
+          "~รอบทบทวนไม่สำเร็จ"
+        ]
+      }
+    },
+    {
+      "name": "สอง batch พร้อมกัน — ต้องคืนครบทั้งคู่ และจับคู่ไม่สลับ",
+      "input": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"agree\",\"final_phase\":\"lag\",\"resolution_note\":null}"
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"stance\":\"stand\",\"final_phase\":\"cold_crash\",\"resolution_note\":\"อุณหภูมิลงตามแผนแล้ว\"}"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Brewmaster Review": [
+          {
+            "batch_id": 4,
+            "beer_name": "Hazy DIPA",
+            "detected_phase": "lag",
+            "reasoning": "a",
+            "should_send_prep_alert": false,
+            "has_dispute": false,
+            "brewmaster_phase_agrees": true,
+            "brewmaster_points_text": "",
+            "discord_embeds": [
+              {
+                "title": "Hazy DIPA",
+                "color": 1,
+                "description": "a"
+              }
+            ]
+          },
+          {
+            "batch_id": 5,
+            "beer_name": "Weizen",
+            "detected_phase": "cold_crash",
+            "reasoning": "b",
+            "should_send_prep_alert": false,
+            "has_dispute": true,
+            "brewmaster_phase_agrees": false,
+            "brewmaster_phase_doubt": "ยังไม่ควร crash",
+            "brewmaster_points_text": "❓ ยังไม่ควร crash",
+            "discord_embeds": [
+              {
+                "title": "Weizen",
+                "color": 2,
+                "description": "b"
+              }
+            ]
+          }
+        ]
+      },
+      "expectCount": 2,
+      "expectIndex": 1,
+      "expect": {
+        "batch_id": 5,
+        "beer_name": "Weizen",
+        "debate_stance": "stand",
+        "discord_embeds.0.fields.0.name": "⚖️ ทบทวนแล้วยืนยันตามเดิม"
+      }
+    }
+  ]
+}

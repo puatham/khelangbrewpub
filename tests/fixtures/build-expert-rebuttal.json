@@ -1,0 +1,62 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Build Expert Rebuttal",
+  "cases": [
+    {
+      "name": "มีข้อขัดแย้ง — prompt ต้องมีทั้งข้อสรุปเดิมและข้อทักท้วง และพก system_prompt ไปด้วย",
+      "input": [{
+        "batch_id": 4, "detected_phase": "fg_stable", "reasoning": "กราฟ SG แบนมา 14 ชม.",
+        "recommended_controller_target_c": null,
+        "brewmaster_verdict": "concern", "brewmaster_phase_agrees": false,
+        "brewmaster_phase_doubt": "กราฟแบนเพราะเซ็นเซอร์เงียบ",
+        "brewmaster_points_text": "❓ สงสัยเรื่องเฟส: กราฟแบนเพราะเซ็นเซอร์เงียบ"
+      }],
+      "context": {
+        "Build Expert Prompt": [{ "system_prompt": "นิยาม 7 เฟส..." }]
+      },
+      "expectCount": 1,
+      "expect": {
+        "batch_id": 4,
+        "system_prompt": "นิยาม 7 เฟส...",
+        "prompt": [
+          "~เฟส: fg_stable",
+          "~กราฟ SG แบนมา 14 ชม.",
+          "~**ไม่เห็นด้วยกับเฟส**",
+          "~กราฟแบนเพราะเซ็นเซอร์เงียบ",
+          "~stance",
+          "~!undefined"
+        ]
+      }
+    },
+    {
+      "name": "ไม่มีข้อขัดแย้ง — ยังต้องสร้าง prompt ได้ ไม่พังและไม่มี undefined",
+      "input": [{
+        "batch_id": 4, "detected_phase": "slowing_ferment", "reasoning": "SG ยังลง",
+        "recommended_controller_target_c": 16.57,
+        "brewmaster_verdict": "ok", "brewmaster_phase_agrees": true,
+        "brewmaster_points_text": ""
+      }],
+      "context": {
+        "Build Expert Prompt": [{ "system_prompt": "นิยาม 7 เฟส..." }]
+      },
+      "expect": {
+        "prompt": [
+          "~เห็นด้วยกับเฟสที่คุณสรุป",
+          "~เสนอปรับ target ตู้เป็น 16.57°C",
+          "~(ไม่มีประเด็นเพิ่มเติม)",
+          "~!undefined"
+        ]
+      }
+    },
+    {
+      "name": "ต้นทางไม่มี system_prompt — ต้องได้สตริงว่าง ไม่ใช่ undefined",
+      "input": [{
+        "batch_id": 4, "detected_phase": "lag", "reasoning": "-",
+        "recommended_controller_target_c": null,
+        "brewmaster_verdict": "ok", "brewmaster_phase_agrees": true, "brewmaster_points_text": ""
+      }],
+      "context": { "Build Expert Prompt": [{}] },
+      "expect": { "system_prompt": "" }
+    }
+  ]
+}
