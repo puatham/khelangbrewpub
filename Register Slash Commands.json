@@ -14,6 +14,40 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ดึงชื่อ Pill มาทำ dropdown ให้คำสั่ง Discord\nSELECT device_name FROM devices WHERE device_type = 'pill' ORDER BY device_name;",
+        "options": {}
+      },
+      "name": "Get Pills For Choices",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        0
+      ],
+      "id": "rsc00001-0000-4000-8000-000000000001",
+      "credentials": {
+        "postgres": {
+          "id": "t6ZZv3ZEHRRZX5Q2",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// สร้างรายการคำสั่งโดยเติม choices ของ pill จากตาราง devices ตอนรัน\n// แทนที่จะเขียนชื่อ Pill ตายตัวไว้ในไฟล์ — เพิ่ม Pill ใหม่แล้วรัน workflow นี้ซ้ำ\n// รายการก็อัปเดตเอง ไม่ต้องมาแก้ JSON\n// (Discord จำกัด choices ไม่เกิน 25 ตัวต่อ option ตอนนี้มี 2 ตัว ยังห่างมาก)\nconst pills = $input.all()\n  .map(i => i.json.device_name)\n  .filter(Boolean)\n  .slice(0, 25);\nif (!pills.length) throw new Error('ไม่พบ Pill ในตาราง devices — รัน Sync Devices ก่อน');\n\nconst commands = [{\"name\": \"ferment_start\", \"description\": \"เริ่ม batch การหมักใหม่ (Controller จะดึงจากที่ Pill จับคู่ไว้ใน RAPT อัตโนมัติ)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"beer\", \"description\": \"ชื่อเบียร์\", \"type\": 3, \"required\": true}, {\"name\": \"date\", \"description\": \"วันเวลาเริ่มหมัก เช่น 12/8/2026 00:00\", \"type\": 3, \"required\": true}, {\"name\": \"recipe\", \"description\": \"ชื่อ recipe ใน Brewfather (optional, เอาไว้ดึง OG/FG/ยีสต์แนะนำ)\", \"type\": 3, \"required\": false, \"autocomplete\": true}]}, {\"name\": \"ferment_stop\", \"description\": \"หยุด batch การหมักที่ active อยู่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_status\", \"description\": \"เช็คสถานะการหมักล่าสุดของ batch (เฟส, gravity, อุณหภูมิ, เหตุผลจาก AI)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_set_temp\", \"description\": \"ปรับ target temperature ของ Controller ที่จับคู่กับ Pill นี้ (สั่งตรงผ่าน RAPT API)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"target\", \"description\": \"target temperature ใหม่ (°C)\", \"type\": 10, \"required\": true}, {\"name\": \"remark\", \"description\": \"เหตุผลที่ปรับ เช่น adjust, d rest, cold crash\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_recipes\", \"description\": \"แสดงรายชื่อ recipe ที่มีใน Brewfather cache (เอาไว้ดูชื่อก่อนพิมพ์ /ferment_start)\", \"options\": [{\"name\": \"search\", \"description\": \"คำค้นหา (optional, กรองเฉพาะชื่อที่ match)\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_band\", \"description\": \"ตั้งช่วงอุณหภูมิของเบียร์ (Pill) ที่ยอมรับได้ — Temp Guard จะเตือนเมื่อหลุดช่วงนี้\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"low\", \"description\": \"อุณหภูมิเบียร์ต่ำสุดที่ยอมรับได้ เช่น 18.0\", \"type\": 10, \"required\": false}, {\"name\": \"high\", \"description\": \"อุณหภูมิเบียร์สูงสุดที่ยอมรับได้ เช่น 18.5\", \"type\": 10, \"required\": false}, {\"name\": \"clear\", \"description\": \"true = ล้างช่วงที่ตั้งไว้ กลับไปใช้แค่ช่วงที่ยีสต์รองรับ\", \"type\": 5, \"required\": false}]}, {\"name\": \"ferment_event\", \"description\": \"บันทึกเหตุการณ์ที่ทำจริงกับ batch (dry hop, ลงยีสต์, ถ่ายถัง) — ต่างจากแผนในสูตร\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"type\", \"description\": \"ชนิดเหตุการณ์\", \"type\": 3, \"required\": true, \"choices\": [{\"name\": \"🌿 Dry hop\", \"value\": \"dry_hop\"}, {\"name\": \"🧫 ลงยีสต์\", \"value\": \"pitch\"}, {\"name\": \"🔄 ถ่ายถัง\", \"value\": \"transfer\"}, {\"name\": \"🧪 เก็บตัวอย่าง\", \"value\": \"sample\"}, {\"name\": \"📝 อื่นๆ\", \"value\": \"other\"}, {\"name\": \"↩️ ยกเลิกรายการล่าสุด\", \"value\": \"undo\"}]}, {\"name\": \"date\", \"description\": \"วันเวลาที่เกิดจริง d/m/yyyy HH:mm (ไม่ใส่ = ตอนนี้)\", \"type\": 3, \"required\": false}, {\"name\": \"note\", \"description\": \"รายละเอียด เช่น รอบ 1 Citra+Amarillo\", \"type\": 3, \"required\": false}]}];\n\n// ทุกคำสั่งที่รับ pill เปลี่ยนจากพิมพ์เองเป็นเลือกจากรายการ\ncommands.forEach(cmd => {\n  (cmd.options || []).forEach(opt => {\n    if (opt.name === 'pill') {\n      opt.choices = pills.map(p => ({ name: p, value: p }));\n      opt.description = 'เลือก Pill';\n    }\n  });\n});\nreturn [{ json: { body: JSON.stringify(commands) } }];"
+      },
+      "name": "Build Command List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "rsc00002-0000-4000-8000-000000000002"
+    },
+    {
+      "parameters": {
         "method": "PUT",
         "url": "=https://discord.com/api/v10/applications/{{ $env.DISCORD_APPLICATION_ID }}/guilds/1537776435589161050/commands",
         "authentication": "predefinedCredentialType",
@@ -21,13 +55,13 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "[{\"name\": \"ferment_start\", \"description\": \"เริ่ม batch การหมักใหม่ (Controller จะดึงจากที่ Pill จับคู่ไว้ใน RAPT อัตโนมัติ)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"beer\", \"description\": \"ชื่อเบียร์\", \"type\": 3, \"required\": true}, {\"name\": \"date\", \"description\": \"วันเวลาเริ่มหมัก เช่น 12/8/2026 00:00\", \"type\": 3, \"required\": true}, {\"name\": \"recipe\", \"description\": \"ชื่อ recipe ใน Brewfather (optional, เอาไว้ดึง OG/FG/ยีสต์แนะนำ)\", \"type\": 3, \"required\": false, \"autocomplete\": true}]}, {\"name\": \"ferment_stop\", \"description\": \"หยุด batch การหมักที่ active อยู่\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_status\", \"description\": \"เช็คสถานะการหมักล่าสุดของ batch (เฟส, gravity, อุณหภูมิ, เหตุผลจาก AI)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}]}, {\"name\": \"ferment_set_temp\", \"description\": \"ปรับ target temperature ของ Controller ที่จับคู่กับ Pill นี้ (สั่งตรงผ่าน RAPT API)\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"target\", \"description\": \"target temperature ใหม่ (°C)\", \"type\": 10, \"required\": true}, {\"name\": \"remark\", \"description\": \"เหตุผลที่ปรับ เช่น adjust, d rest, cold crash\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_recipes\", \"description\": \"แสดงรายชื่อ recipe ที่มีใน Brewfather cache (เอาไว้ดูชื่อก่อนพิมพ์ /ferment_start)\", \"options\": [{\"name\": \"search\", \"description\": \"คำค้นหา (optional, กรองเฉพาะชื่อที่ match)\", \"type\": 3, \"required\": false}]}, {\"name\": \"ferment_band\", \"description\": \"ตั้งช่วงอุณหภูมิของเบียร์ (Pill) ที่ยอมรับได้ — Temp Guard จะเตือนเมื่อหลุดช่วงนี้\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"low\", \"description\": \"อุณหภูมิเบียร์ต่ำสุดที่ยอมรับได้ เช่น 18.0\", \"type\": 10, \"required\": false}, {\"name\": \"high\", \"description\": \"อุณหภูมิเบียร์สูงสุดที่ยอมรับได้ เช่น 18.5\", \"type\": 10, \"required\": false}, {\"name\": \"clear\", \"description\": \"true = ล้างช่วงที่ตั้งไว้ กลับไปใช้แค่ช่วงที่ยีสต์รองรับ\", \"type\": 5, \"required\": false}]}, {\"name\": \"ferment_event\", \"description\": \"บันทึกเหตุการณ์ที่ทำจริงกับ batch (dry hop, ลงยีสต์, ถ่ายถัง) — ต่างจากแผนในสูตร\", \"options\": [{\"name\": \"pill\", \"description\": \"ชื่อ Pill (เช่น Pill01)\", \"type\": 3, \"required\": true}, {\"name\": \"type\", \"description\": \"ชนิดเหตุการณ์\", \"type\": 3, \"required\": true, \"choices\": [{\"name\": \"🌿 Dry hop\", \"value\": \"dry_hop\"}, {\"name\": \"🧫 ลงยีสต์\", \"value\": \"pitch\"}, {\"name\": \"🔄 ถ่ายถัง\", \"value\": \"transfer\"}, {\"name\": \"🧪 เก็บตัวอย่าง\", \"value\": \"sample\"}, {\"name\": \"📝 อื่นๆ\", \"value\": \"other\"}, {\"name\": \"↩️ ยกเลิกรายการล่าสุด\", \"value\": \"undo\"}]}, {\"name\": \"date\", \"description\": \"วันเวลาที่เกิดจริง d/m/yyyy HH:mm (ไม่ใส่ = ตอนนี้)\", \"type\": 3, \"required\": false}, {\"name\": \"note\", \"description\": \"รายละเอียด เช่น รอบ 1 Citra+Amarillo\", \"type\": 3, \"required\": false}]}]",
+        "body": "={{ $json.body }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.5,
       "position": [
-        220,
+        672,
         0
       ],
       "id": "2ef23c81-74d8-40d7-82f3-c4333b1eeace",
@@ -43,6 +77,28 @@
   "pinData": {},
   "connections": {
     "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Pills For Choices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pills For Choices": {
+      "main": [
+        [
+          {
+            "node": "Build Command List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Command List": {
       "main": [
         [
           {
