@@ -68,6 +68,57 @@ services:
     depends_on:
       - postgresql
 
+  # =====================================================================
+  # Grafana — แดชบอร์ดดูข้อมูล Pill/ตู้ควบคุม เปิดออกอินเทอร์เน็ต
+  #
+  # ต่อ Postgres ด้วย user grafana_ro ที่ SELECT ได้อย่างเดียว ไม่ใช่ root —
+  # ของที่เปิดออกเน็ตไม่ควรถือสิทธิ์เขียนฐานข้อมูลการหมักทั้งก้อน
+  #
+  # **จุดที่พลาดกันบ่อย**: บัญชีที่ใช้เป็น @gmail.com ถ้าตั้ง
+  # GF_AUTH_GOOGLE_ALLOWED_DOMAINS=gmail.com จะกลายเป็นเปิดให้บัญชี Google
+  # ทุกบัญชีในโลกเข้าได้ (มันกรองที่ "โดเมน" ไม่ใช่ที่อีเมล) จึงใช้วิธีปิดสมัคร
+  # อัตโนมัติแทน แล้วให้ล็อกอินสำเร็จเฉพาะอีเมลที่มี user อยู่แล้วเท่านั้น
+  # =====================================================================
+  grafana:
+    image: grafana/grafana:11.6.1
+    restart: always
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`${GRAFANA_HOST}`)
+      - traefik.http.routers.grafana.tls=true
+      - traefik.http.routers.grafana.entrypoints=web,websecure
+      - traefik.http.routers.grafana.tls.certresolver=mytlschallenge
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+    environment:
+      - GF_SERVER_ROOT_URL=https://${GRAFANA_HOST}
+      - GF_SERVER_DOMAIN=${GRAFANA_HOST}
+      # admin แบบรหัสผ่านเก็บไว้เป็นทางสำรอง เผื่อ Google OAuth ล่มแล้วเข้าไม่ได้เลย
+      # อีเมลของ admin ตั้งเป็น Gmail ของผู้ใช้ พอ login ด้วย Google อีเมลตรงกัน
+      # Grafana จะ map เข้าบัญชี admin เดิม ไม่ได้สร้างบัญชีใหม่
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD}
+      - GF_SECURITY_ADMIN_EMAIL=${GF_ADMIN_EMAIL}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_GOOGLE_ENABLED=true
+      - GF_AUTH_GOOGLE_CLIENT_ID=${GF_GOOGLE_CLIENT_ID}
+      - GF_AUTH_GOOGLE_CLIENT_SECRET=${GF_GOOGLE_CLIENT_SECRET}
+      - GF_AUTH_GOOGLE_SCOPES=openid email profile
+      - GF_AUTH_GOOGLE_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth
+      - GF_AUTH_GOOGLE_TOKEN_URL=https://oauth2.googleapis.com/token
+      - GF_AUTH_GOOGLE_API_URL=https://openidconnect.googleapis.com/v1/userinfo
+      # ตัวสำคัญ — อีเมลที่ยังไม่มี user ใน Grafana จะถูกปฏิเสธ ไม่สร้างให้อัตโนมัติ
+      - GF_AUTH_GOOGLE_ALLOW_SIGN_UP=false
+      - GF_DB_PASSWORD=${GF_DB_PASSWORD}
+      - TZ=${GENERIC_TIMEZONE}
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - postgresql
+
   postgresql:
     image: postgres:17
     restart: unless-stopped

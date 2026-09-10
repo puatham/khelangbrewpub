@@ -1,0 +1,595 @@
+{
+  "uid": "ferment-main",
+  "title": "การหมัก — Pill กับตู้ควบคุม",
+  "tags": [
+    "ferment"
+  ],
+  "timezone": "Asia/Bangkok",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "editable": true,
+  "time": {
+    "from": "now-14d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "pill",
+        "label": "Pill",
+        "type": "query",
+        "datasource": {
+          "type": "postgres",
+          "uid": "rapt-pg"
+        },
+        "query": "SELECT device_name AS __text, device_id::text AS __value FROM devices WHERE device_type = 'pill' ORDER BY device_name",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 10,
+      "title": "เฟสตอนนี้",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT b.current_phase AS \"เฟส\" FROM batches b\n WHERE b.pill_device_id = '$pill'::uuid ORDER BY (b.status = 'active') DESC, b.start_date DESC, b.batch_id DESC LIMIT 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 11,
+      "title": "อุณหภูมิเบียร์ล่าสุด",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT p.temperature_c FROM pill_readings p\n WHERE p.device_id = '$pill'::uuid ORDER BY p.time_utc DESC LIMIT 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "title": "ข้อมูลล่าสุดเมื่อ",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - max(p.time_utc)))/60 AS \"นาทีก่อน\"\n FROM pill_readings p WHERE p.device_id = '$pill'::uuid",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "title": "หมักมาแล้ว",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (now() - (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)))/86400 AS \"วัน\" ",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 1,
+      "title": "อุณหภูมิ — เบียร์ / ตู้ / target",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT p.time_utc AS time, p.temperature_c AS \"เบียร์ (Pill)\"\nFROM pill_readings p\nWHERE p.device_id = '$pill'::uuid AND p.time_utc >= (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT c.time_utc AS time,\n       c.temperature_c        AS \"ตู้ควบคุม\",\n       c.target_temperature_c AS \"target ที่ตั้งไว้\"\nFROM temp_controller_readings c\nWHERE c.device_id = (SELECT temp_controller_device_id FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AND c.time_utc >= (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        },
+        {
+          "refId": "C",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT t AS time, lo AS \"ขอบล่างที่ตั้งไว้\", hi AS \"ขอบบนที่ตั้งไว้\" FROM (\n  SELECT (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AS t,\n         (SELECT beer_band_low_c FROM batches WHERE pill_device_id='$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AS lo,\n         (SELECT beer_band_high_c FROM batches WHERE pill_device_id='$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AS hi\n  UNION ALL\n  SELECT now(),\n         (SELECT beer_band_low_c FROM batches WHERE pill_device_id='$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1),\n         (SELECT beer_band_high_c FROM batches WHERE pill_device_id='$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\n) x WHERE lo IS NOT NULL ORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "pointSize": 4
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*ขอบ.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    8
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "target ที่ตั้งไว้"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    4,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Gravity (SG) — ดูแนวโน้ม ไม่ใช่ค่าสัมบูรณ์ Pill ไม่ได้ calibrate",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT p.time_utc AS time, p.gravity_sg AS \"SG\"\nFROM pill_readings p\nWHERE p.device_id = '$pill'::uuid AND p.time_utc >= (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1) AND p.gravity_sg IS NOT NULL\nORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 4,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "คุณภาพสัญญาณ Pill — RSSI กับแบต",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT p.time_utc AS time, p.rssi_dbm AS \"RSSI (dBm)\", p.battery_percent AS \"แบต (%)\"\nFROM pill_readings p\nWHERE p.device_id = '$pill'::uuid AND p.time_utc >= (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "pointSize": 4
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "แบต (%)"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "ช่องว่างของข้อมูล — แท่งสูง = Pill เงียบไปนาน (ปกติ 15 นาที)",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "rapt-pg"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_utc AS time,\n       EXTRACT(EPOCH FROM (time_utc - lag(time_utc) OVER (ORDER BY time_utc)))/60 AS \"ช่องว่าง (นาที)\"\nFROM pill_readings\nWHERE device_id = '$pill'::uuid AND time_utc >= (SELECT start_date FROM batches WHERE pill_device_id = '$pill'::uuid ORDER BY (status = 'active') DESC, start_date DESC, batch_id DESC LIMIT 1)\nORDER BY 1",
+          "datasource": {
+            "type": "postgres",
+            "uid": "rapt-pg"
+          },
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 70,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 25
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}

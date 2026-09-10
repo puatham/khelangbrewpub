@@ -1,0 +1,29 @@
+# แหล่งข้อมูลของ Grafana — ตั้งเป็นไฟล์ ไม่ได้กดสร้างในหน้าเว็บ
+# เพราะถ้ากดสร้างเอง พอลบ container ทิ้งก็หายหมดต้องมานั่งคลิกใหม่ และไม่มีอะไรใน git
+# บอกได้ว่าตอนนี้มันต่อไปที่ไหนด้วยสิทธิ์อะไร
+#
+# ใช้ user grafana_ro ที่ SELECT ได้อย่างเดียว ไม่ใช่ POSTGRES_USER — Grafana เปิดออก
+# อินเทอร์เน็ต ถ้าวันหนึ่งมีช่องโหว่ที่ตัวมันเอง สิ่งที่หลุดคือ "อ่านข้อมูลได้" ไม่ใช่
+# "ลบฐานข้อมูลการหมักทั้งก้อนได้"
+apiVersion: 1
+
+datasources:
+  - name: rapt
+    type: postgres
+    uid: rapt-pg
+    access: proxy
+    url: postgresql:5432
+    database: rapt
+    user: grafana_ro
+    isDefault: true
+    editable: false
+    secureJsonData:
+      # อ่านจาก env ของ container ค่าจริงอยู่ใน .env บนเซิร์ฟเวอร์เท่านั้น ไม่ขึ้น git
+      password: $GF_DB_PASSWORD
+    jsonData:
+      sslmode: disable          # อยู่ใน docker network เดียวกัน ไม่ได้ออกนอกเครื่อง
+      postgresVersion: 1700
+      timescaledb: false
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400

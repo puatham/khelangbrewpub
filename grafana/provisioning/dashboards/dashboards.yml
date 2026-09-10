@@ -1,0 +1,16 @@
+# โหลดแดชบอร์ดจากไฟล์ในโฟลเดอร์นี้ตอน Grafana สตาร์ท
+# allowUiUpdates: true เพื่อให้ยังลากปรับในหน้าเว็บได้ตอนลองของ — แต่ของที่ปรับในเว็บ
+# จะถูกทับทุกครั้งที่ container สตาร์ทใหม่ ถ้าปรับแล้วชอบต้อง Export JSON กลับมาลงไฟล์นี้
+apiVersion: 1
+
+providers:
+  - name: ferment
+    orgId: 1
+    folder: 'การหมัก'
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
