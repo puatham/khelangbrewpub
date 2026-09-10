@@ -27,7 +27,11 @@
         "refresh": 1,
         "includeAll": false,
         "multi": false,
-        "current": {}
+        "current": {
+          "selected": true,
+          "text": "Pill01",
+          "value": "29b512a1-55ef-4460-ad6e-16cdbe4af4cc"
+        }
       },
       {
         "name": "range",
@@ -42,7 +46,11 @@
         "refresh": 2,
         "includeAll": false,
         "multi": false,
-        "current": {}
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        }
       }
     ]
   },
