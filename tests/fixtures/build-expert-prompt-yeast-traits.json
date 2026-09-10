@@ -1,0 +1,181 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Build Expert Prompt",
+  "cases": [
+    {
+      "name": "ยีสต์ lager — prompt ต้องบอกว่า d-rest จำเป็น ไม่ใช่แค่แนะนำ",
+      "input": [
+        {
+          "batch_id": 1,
+          "beer_name": "Test Lager",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.02,
+              "temp": 12.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": 1.02,
+              "temp": 12.0
+            }
+          ],
+          "recipe_name": "Test Lager Recipe",
+          "style_name": "Helles",
+          "yeast_name": "Saflager Lager",
+          "yeast_type": "Lager",
+          "yeast_flocculation": "High",
+          "yeast_min_temp_c": 12,
+          "yeast_max_temp_c": 18,
+          "yeast_min_attenuation": 80,
+          "yeast_max_attenuation": 84,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "analysis_time_iso": "2026-09-10T09:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~[Lager]",
+          "~diacetyl_rest จำเป็น ไม่ใช่แค่แนะนำเหมือน ale ทั่วไป",
+          "~flocculation สูง — ยีสต์มักตกตะกอนไวจนกราฟดูแบนก่อนหมักจบจริง",
+          "~ห้ามสรุป fg_stable จากกราฟแบนอย่างเดียว ต้องเทียบ attenuation"
+        ],
+        "brewmaster_context.yeast_type": "Lager",
+        "brewmaster_context.yeast_flocculation": "High"
+      }
+    },
+    {
+      "name": "ยีสต์ diastatic (WB-06 สไตล์) — ห้ามใช้เพดาน attenuation ปกติปิด fg_stable",
+      "input": [
+        {
+          "batch_id": 2,
+          "beer_name": "Test Wheat",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.01,
+              "temp": 20.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": 1.01,
+              "temp": 20.0
+            }
+          ],
+          "recipe_name": "Test Wheat Recipe",
+          "style_name": "Wheat",
+          "yeast_name": "WB-06",
+          "yeast_type": "Wheat",
+          "yeast_flocculation": "Medium",
+          "yeast_diastatic": true,
+          "yeast_min_temp_c": 18,
+          "yeast_max_temp_c": 26,
+          "yeast_min_attenuation": 50,
+          "yeast_max_attenuation": 80,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "analysis_time_iso": "2026-09-10T09:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~ยีสต์ตัวนี้เป็น diastatic",
+          "~ย่อยเดกซ์ทรินที่ยีสต์ทั่วไปกินไม่ได้",
+          "~ห้ามใช้เพดาน attenuation ปกติมาตัดสินว่าหมักจบแล้ว",
+          "~!diacetyl_rest จำเป็น ไม่ใช่แค่แนะนำเหมือน ale ทั่วไป"
+        ],
+        "brewmaster_context.yeast_diastatic": true
+      }
+    },
+    {
+      "name": "ยีสต์ ale flocculation ปานกลาง — ไม่ต้องมีคำเตือน lager/flocculation สูง/diastatic เลย",
+      "input": [
+        {
+          "batch_id": 3,
+          "beer_name": "Test Ale",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.01,
+              "temp": 20.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": 1.01,
+              "temp": 20.0
+            }
+          ],
+          "recipe_name": "Test IPA Recipe",
+          "style_name": "IPA",
+          "yeast_name": "Verdant IPA",
+          "yeast_type": "Ale",
+          "yeast_flocculation": "Medium",
+          "yeast_min_temp_c": 18,
+          "yeast_max_temp_c": 25,
+          "yeast_min_attenuation": 75,
+          "yeast_max_attenuation": 82,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "analysis_time_iso": "2026-09-10T09:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~[Ale]",
+          "~!diacetyl_rest จำเป็น ไม่ใช่แค่แนะนำเหมือน ale ทั่วไป",
+          "~!flocculation สูง — ยีสต์มักตกตะกอนไวจนกราฟดูแบนก่อนหมักจบจริง",
+          "~!ยีสต์ตัวนี้เป็น diastatic"
+        ]
+      }
+    },
+    {
+      "name": "batch ไม่ผูก recipe — ไม่มี yeast_type เลย ต้องไม่พังและไม่มีคำเตือนใดๆ",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "No Recipe",
+          "current_phase": "lag",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.05,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": 1.05,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-10T09:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~!diacetyl_rest จำเป็น ไม่ใช่แค่แนะนำเหมือน ale ทั่วไป",
+          "~!flocculation สูง — ยีสต์มักตกตะกอนไวจนกราฟดูแบนก่อนหมักจบจริง",
+          "~!ยีสต์ตัวนี้เป็น diastatic"
+        ],
+        "brewmaster_context.yeast_type": null,
+        "brewmaster_context.yeast_flocculation": null,
+        "brewmaster_context.yeast_diastatic": null
+      }
+    }
+  ]
+}

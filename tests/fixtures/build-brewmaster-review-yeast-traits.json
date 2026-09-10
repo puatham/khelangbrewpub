@@ -1,0 +1,72 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Build Brewmaster Review",
+  "cases": [
+    {
+      "name": "ยีสต์ lager diastatic flocculation สูง — ทั้งสามต้องโผล่ใน yeastLine",
+      "input": [
+        {
+          "batch_id": 1,
+          "beer_name": "Test",
+          "detected_phase": "slowing_ferment",
+          "reasoning": "SG ยังลง",
+          "temperature_c": 12.5,
+          "controller_temp_c": 12.4,
+          "target_temperature_c": 12.5,
+          "abv_percent": 4.2
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          {
+            "brewmaster_context": {
+              "yeast_name": "Saflager Lager",
+              "yeast_type": "Lager",
+              "yeast_flocculation": "High",
+              "yeast_diastatic": true,
+              "yeast_min_temp_c": 12,
+              "yeast_max_temp_c": 18,
+              "yeast_min_attenuation": 80,
+              "yeast_max_attenuation": 84
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~Saflager Lager [Lager]",
+          "~flocculation High",
+          "~diastatic — attenuation จริงสูงเกินเพดานสายพันธุ์ได้"
+        ]
+      }
+    },
+    {
+      "name": "batch ไม่ผูก recipe — yeastLine ต้องบอกตรงๆ ไม่ใช่ undefined",
+      "input": [
+        {
+          "batch_id": 2,
+          "beer_name": "Test",
+          "detected_phase": "lag",
+          "reasoning": "เพิ่งเริ่ม",
+          "temperature_c": 18.0,
+          "controller_temp_c": 18.0,
+          "target_temperature_c": 18.0,
+          "abv_percent": 0
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          { "brewmaster_context": {} }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~ไม่ระบุ (batch นี้ไม่ได้ผูก recipe ไว้)",
+          "~!undefined"
+        ]
+      }
+    }
+  ]
+}

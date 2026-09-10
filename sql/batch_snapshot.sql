@@ -58,6 +58,14 @@ RETURNS TABLE (
   yeast_attenuation          numeric,
   yeast_min_attenuation      numeric,
   yeast_max_attenuation      numeric,
+  -- ทั้งสามตัวมีอยู่ใน raw_data ของ Brewfather อยู่แล้วแต่ไม่เคยถูกส่งต่อให้ AI:
+  -- type บอกว่าเป็น lager หรือเปล่า (d-rest จำเป็นสำหรับ lager แต่ prompt เดิมให้ AI
+  -- เดาจากชื่อสูตร), flocculation สูงทำให้ gravity ดูแบนก่อนหมักจบจริง (fg_stable หลอก),
+  -- diastatic (เช่น Fermentis WB-06 ที่กิน dextrin ต่อได้เรื่อยๆ) ห้ามใช้เพดาน
+  -- attenuation ปกติมาปิดเฟส เสี่ยงประกาศ fg_stable ทั้งที่ยังหมักซ้ำอยู่
+  yeast_type                 text,
+  yeast_flocculation         text,
+  yeast_diastatic            boolean,
   pill_stale_hours           numeric,
   pill_last_at               timestamptz,
   pill_battery_percent       numeric,
@@ -120,7 +128,10 @@ recipe_info AS (
             FROM jsonb_array_elements(COALESCE(r.raw_data->'hops', '[]'::jsonb)) dh
             WHERE dh->>'use' ILIKE '%dry%') AS dry_hop_plan,
          y.name AS yeast_name, y.min_temp_c AS yeast_min_temp_c, y.max_temp_c AS yeast_max_temp_c,
-         y.attenuation AS yeast_attenuation, y.min_attenuation AS yeast_min_attenuation, y.max_attenuation AS yeast_max_attenuation
+         y.attenuation AS yeast_attenuation, y.min_attenuation AS yeast_min_attenuation, y.max_attenuation AS yeast_max_attenuation,
+         y.raw_data->>'type' AS yeast_type,
+         y.flocculation AS yeast_flocculation,
+         (y.raw_data->>'fermentsAll')::boolean AS yeast_diastatic
   FROM recipes r
   LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(r.yeast_name))
   WHERE r.recipe_id = (SELECT recipe_id FROM b)
@@ -221,6 +232,7 @@ SELECT
   COALESCE(ri.dry_hop_plan, '[]'::jsonb) AS dry_hop_plan,
   ri.yeast_name, ri.yeast_min_temp_c, ri.yeast_max_temp_c,
   ri.yeast_attenuation, ri.yeast_min_attenuation, ri.yeast_max_attenuation,
+  ri.yeast_type, ri.yeast_flocculation, ri.yeast_diastatic,
   sc.pill_stale_hours, sc.pill_last_at,
   lb.battery_percent AS pill_battery_percent,
   fg.gap AS fallback_gap_c, fg.n_points AS fallback_gap_points, fg.gap_sd AS fallback_gap_sd,
