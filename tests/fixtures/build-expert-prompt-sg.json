@@ -1,0 +1,934 @@
+{
+  "workflow": "Phase Analysis Engine",
+  "node": "Build Expert Prompt",
+  "cases": [
+    {
+      "name": "สรุป gravity — แบน 3 ชม. ลด 0.021 ใน 24 ชม. หมักถึงเพดานยีสต์",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Test",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.04,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": 1.039,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T02:00:00Z",
+              "sg": 1.038,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T03:00:00Z",
+              "sg": 1.037,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T04:00:00Z",
+              "sg": 1.036,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T05:00:00Z",
+              "sg": 1.035,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T06:00:00Z",
+              "sg": 1.034,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T07:00:00Z",
+              "sg": 1.033,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T08:00:00Z",
+              "sg": 1.032,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T09:00:00Z",
+              "sg": 1.031,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T10:00:00Z",
+              "sg": 1.03,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T11:00:00Z",
+              "sg": 1.029,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T12:00:00Z",
+              "sg": 1.028,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T13:00:00Z",
+              "sg": 1.027,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T14:00:00Z",
+              "sg": 1.026,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T15:00:00Z",
+              "sg": 1.025,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T16:00:00Z",
+              "sg": 1.024,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T17:00:00Z",
+              "sg": 1.023,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T18:00:00Z",
+              "sg": 1.022,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T19:00:00Z",
+              "sg": 1.021,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "sg": 1.02,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T21:00:00Z",
+              "sg": 1.019,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T22:00:00Z",
+              "sg": 1.018,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T23:00:00Z",
+              "sg": 1.017,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "sg": 1.016,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T01:00:00Z",
+              "sg": 1.015,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T02:00:00Z",
+              "sg": 1.014,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T03:00:00Z",
+              "sg": 1.013,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T04:00:00Z",
+              "sg": 1.013,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T05:00:00Z",
+              "sg": 1.013,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T06:00:00Z",
+              "sg": 1.013,
+              "temp": 18.0
+            }
+          ],
+          "controller_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T07:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T08:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T09:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T10:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T11:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T12:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T13:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T14:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T15:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T16:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T17:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T18:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T19:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T21:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T22:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T23:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            }
+          ],
+          "control_series": [],
+          "recipe_id": "r1",
+          "recipe_name": "Hazy",
+          "style_name": "IPA",
+          "recipe_og": 1.07,
+          "recipe_fg": 1.012,
+          "recipe_fermentation_temp_c": 18,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "yeast_name": "y",
+          "yeast_min_temp_c": 18,
+          "yeast_max_temp_c": 25,
+          "yeast_attenuation": 78,
+          "yeast_min_attenuation": 72,
+          "yeast_max_attenuation": 80,
+          "pill_stale_hours": 0.2,
+          "pill_last_at": "2026-09-11T06:00:00Z",
+          "pill_battery_percent": 100,
+          "fallback_gap_c": null,
+          "fallback_gap_points": 0,
+          "fallback_gap_sd": null,
+          "stable_gap_c": 1.7,
+          "stable_gap_points": 40,
+          "controller_name": "Fridge",
+          "beer_band_low_c": 18,
+          "beer_band_high_c": 18.5,
+          "analysis_time_iso": "2026-09-11T06:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "brewmaster_context.sg_summary_available": true,
+        "brewmaster_context.sg_now": 1.013,
+        "brewmaster_context.sg_flat_hours": 3,
+        "brewmaster_context.sg_drop_24h": -0.021,
+        "brewmaster_context.sg_slope_12h_per_hour": -0.00075,
+        "brewmaster_context.attenuation_status": [
+          "~81%",
+          "~ถึงเพดานแล้ว"
+        ]
+      }
+    },
+    {
+      "name": "มีจุดเดียว — ต้องบอกว่าสรุปไม่ได้ ไม่ใช่เดา",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Test",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.04,
+              "temp": 18.0
+            }
+          ],
+          "controller_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T07:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T08:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T09:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T10:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T11:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T12:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T13:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T14:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T15:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T16:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T17:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T18:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T19:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T21:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T22:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T23:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            }
+          ],
+          "control_series": [],
+          "recipe_id": "r1",
+          "recipe_name": "Hazy",
+          "style_name": "IPA",
+          "recipe_og": 1.07,
+          "recipe_fg": 1.012,
+          "recipe_fermentation_temp_c": 18,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "yeast_name": "y",
+          "yeast_min_temp_c": 18,
+          "yeast_max_temp_c": 25,
+          "yeast_attenuation": 78,
+          "yeast_min_attenuation": 72,
+          "yeast_max_attenuation": 80,
+          "pill_stale_hours": 0.2,
+          "pill_last_at": "2026-09-11T06:00:00Z",
+          "pill_battery_percent": 100,
+          "fallback_gap_c": null,
+          "fallback_gap_points": 0,
+          "fallback_gap_sd": null,
+          "stable_gap_c": 1.7,
+          "stable_gap_points": 40,
+          "controller_name": "Fridge",
+          "beer_band_low_c": 18,
+          "beer_band_high_c": 18.5,
+          "analysis_time_iso": "2026-09-11T06:00:00Z"
+        }
+      ],
+      "expect": {
+        "brewmaster_context.sg_summary_available": false,
+        "brewmaster_context.sg_flat_hours": "__absent__"
+      }
+    },
+    {
+      "name": "Pill อ่าน gravity ไม่ได้เลย — ต้องไม่พังและไม่แต่งตัวเลขขึ้นมา",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Test",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-08T08:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T02:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T03:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T04:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T05:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T06:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T07:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T08:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T09:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T10:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T11:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T12:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T13:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T14:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T15:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T16:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T17:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T18:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T19:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T21:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T22:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-10T23:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T01:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T02:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T03:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T04:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T05:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T06:00:00Z",
+              "sg": null,
+              "temp": 18.0
+            }
+          ],
+          "controller_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T07:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T08:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T09:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T10:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T11:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T12:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T13:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T14:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T15:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T16:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T17:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T18:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T19:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T21:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T22:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-10T23:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T01:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T02:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T03:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T04:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T05:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            },
+            {
+              "t": "2026-09-11T06:00:00Z",
+              "temp": 16.3,
+              "target": 16.3
+            }
+          ],
+          "control_series": [],
+          "recipe_id": "r1",
+          "recipe_name": "Hazy",
+          "style_name": "IPA",
+          "recipe_og": 1.07,
+          "recipe_fg": 1.012,
+          "recipe_fermentation_temp_c": 18,
+          "fermentation_steps": [],
+          "dry_hop_plan": [],
+          "yeast_name": "y",
+          "yeast_min_temp_c": 18,
+          "yeast_max_temp_c": 25,
+          "yeast_attenuation": 78,
+          "yeast_min_attenuation": 72,
+          "yeast_max_attenuation": 80,
+          "pill_stale_hours": 0.2,
+          "pill_last_at": "2026-09-11T06:00:00Z",
+          "pill_battery_percent": 100,
+          "fallback_gap_c": null,
+          "fallback_gap_points": 0,
+          "fallback_gap_sd": null,
+          "stable_gap_c": 1.7,
+          "stable_gap_points": 40,
+          "controller_name": "Fridge",
+          "beer_band_low_c": 18,
+          "beer_band_high_c": 18.5,
+          "analysis_time_iso": "2026-09-11T06:00:00Z"
+        }
+      ],
+      "expect": {
+        "brewmaster_context.sg_summary_available": false
+      }
+    }
+  ]
+}

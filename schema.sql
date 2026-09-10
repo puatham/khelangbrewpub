@@ -127,7 +127,13 @@ CREATE TABLE phase_log (
   ai_reasoning TEXT,
   controller_temp_c NUMERIC,
   target_temperature_c NUMERIC,
-  abv_percent NUMERIC
+  abv_percent NUMERIC,
+  -- ผลการถกเถียงของสอง agent (เพิ่ม 10 ก.ย.) มีไว้ตอบด้วยข้อมูลจริงว่าชั้นตรวจสอบไขว้
+  -- เปลี่ยนอะไรได้บ้าง ถ้า debate_revised เป็น false ทุกรอบก็ถอดทิ้งประหยัดไป 2 Claude call
+  brewmaster_verdict  TEXT,      -- ok / watch / concern
+  debate_stance       TEXT,      -- agree / revise / stand
+  debate_revised      BOOLEAN,   -- ผู้เชี่ยวชาญยอมแก้เฟสตามข้อทักท้วงไหม
+  debate_phase_before TEXT       -- ถ้าแก้ แก้มาจากเฟสอะไร
 );
 
 -- ---------------------------------------------------------------------
