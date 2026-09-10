@@ -7,7 +7,7 @@
 #   ที่เหลือกลายเป็นข้อความเปล่า → "invalid syntax" → Phase Analysis Engine พังทั้งตัว
 #   กว่าจะรู้คือรอ cron รันจริงแล้วดู log
 #
-# เช็ค 5 อย่าง:
+# เช็ค 8 อย่าง:
 #   1. ไฟล์ parse เป็น JSON ได้ และมี id (ไม่มี id = import แล้วได้ workflow ใหม่ซ้ำ)
 #   2. jsCode ทุกก้อนผ่าน node --check
 #   3. expression ไม่มี }} ติดกันอยู่ข้างใน
@@ -15,6 +15,7 @@
 #   5. node ที่รันเองต้องตั้ง errorWorkflow (ไม่งั้นพังเงียบ)
 #   6. $('ชื่อ node') ต้องชี้ไป node ที่มีอยู่จริง (เปลี่ยนชื่อแล้วลืมแก้ที่อ้าง)
 #   7. Code node ที่ป้อนเข้า HTTP ต้องส่งฟิลด์ที่ URL ของมันใช้ — ลืมแล้ว path เพี้ยนเงียบๆ
+#   8. ทุก action ใน actionMap ต้องมี rule ใน Switch รองรับ (ไม่งั้นคำสั่งเงียบ)
 #
 # ใช้:  ./validate-workflows.py [ไฟล์...]      ไม่ใส่ = ตรวจ workflows/*.json ทั้งหมด
 # คืน exit code 1 ถ้าเจอปัญหา — deploy-workflows.sh เรียกตัวนี้ก่อนส่งขึ้นเซิร์ฟเวอร์
@@ -177,6 +178,51 @@ def check_http_inputs(wf_name, wf, nodes_by_name):
                      '    ลืมส่งต่อแล้วจะเป็น undefined เงียบๆ ไปพังที่ HTTP node แทน')
 
 
+def check_action_routing(wf_name, wf):
+    """ทุกค่าที่ actionMap สร้างได้ ต้องมีปลายทางใน Switch ที่ route ตาม $json.action
+
+    ยุบ IF 7 ตัวเป็น Switch แล้วเพิ่มคำสั่งใหม่ทีหลัง ถ้าลืมเพิ่ม rule คำสั่งนั้นจะเงียบ
+    ไม่มี error ไม่มีคำตอบ ผู้ใช้ได้แต่ "is thinking..." ค้างไว้ — จับตอน deploy ดีกว่า
+    """
+    actions = set()
+    for node in wf['nodes']:
+        code = node.get('parameters', {}).get('jsCode') or ''
+        m = re.search(r'actionMap\s*=\s*\{(.*?)\}', code, re.S)
+        if m:
+            actions |= {v for v in re.findall(r":\s*'([^']+)'", m.group(1))}
+    if not actions:
+        return
+
+    routed = set()
+    switch_names = []
+    for node in wf['nodes']:
+        if not node['type'].endswith('.switch'):
+            continue
+        blob = json.dumps(node.get('parameters', {}), ensure_ascii=False)
+        if '$json.action' not in blob:
+            continue
+        switch_names.append(node['name'])
+        for rule in node['parameters'].get('rules', {}).get('values', []):
+            for cond in rule.get('conditions', {}).get('conditions', []):
+                if 'action' in str(cond.get('leftValue', '')):
+                    routed.add(cond.get('rightValue'))
+    if not switch_names:
+        return                      # ยังใช้ IF chain อยู่ ไม่ตรวจ
+
+    missing = sorted(actions - routed - {'unknown'})
+    if missing:
+        fail(wf_name, switch_names[0],
+             f'action ที่ไม่มีปลายทาง: {", ".join(missing)}',
+             'actionMap สร้างค่าเหล่านี้ได้ แต่ Switch ไม่มี rule รองรับ —\n'
+             '    คำสั่งจะเงียบ ไม่มี error ผู้ใช้เห็นแค่ "is thinking..." ค้าง')
+
+    stray = sorted(routed - actions)
+    if stray:
+        fail(wf_name, switch_names[0],
+             f'Switch มี rule ที่ actionMap ไม่เคยสร้าง: {", ".join(stray)}',
+             'สะกดผิด หรือเหลือค้างจากคำสั่งที่ถอดไปแล้ว')
+
+
 def main():
     files = sys.argv[1:] or sorted(
         os.path.join('workflows', f) for f in os.listdir('workflows') if f.endswith('.json'))
@@ -211,6 +257,7 @@ def main():
             check_node_refs(name, node['name'], json.dumps(others, ensure_ascii=False), known, 'expression')
 
         check_http_inputs(name, wf, {x['name']: x for x in wf['nodes']})
+        check_action_routing(name, wf)
 
         # สายที่ต่อไว้ใน connections ต้องชี้ไป node ที่มีจริงเช่นกัน
         for src, conn in (wf.get('connections') or {}).items():

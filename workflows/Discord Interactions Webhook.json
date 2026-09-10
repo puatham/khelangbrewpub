@@ -200,39 +200,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "68fd5ad6-9d13-44cb-949d-2fa8f94752cd",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "start",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1312,
-        160
-      ],
-      "id": "90141107-5130-40eb-9b4c-bb7c27509925",
-      "name": "Is Start?"
-    },
-    {
-      "parameters": {
         "operation": "executeQuery",
         "query": "WITH pill_device AS (\n  SELECT device_id, (raw_data->>'pairedDeviceId')::uuid AS controller_id\n  FROM devices WHERE trim(device_name) = trim($1) AND device_type = 'pill' LIMIT 1\n),\n-- กันสร้าง batch ซ้ำ: ถ้า Pill ตัวนี้มี batch active ค้างอยู่ ไม่ insert แล้วส่งข้อมูล\n-- batch เดิมกลับไปให้ข้อความ followup เตือนแทน (เคยเกิดจริง 18 ส.ค. — Hazy DIPA ถูก\n-- start ซ้ำโดยไม่ตั้งใจจนมี 2 แถวชี้ Pill เดียวกัน ระบบวิเคราะห์ซ้ำ 2 รอบ)\nexisting_batch AS (\n  SELECT b.batch_id, b.beer_name, b.start_date\n  FROM batches b JOIN pill_device pd ON b.pill_device_id = pd.device_id\n  WHERE b.status = 'active' LIMIT 1\n),\nmatched_recipe AS (\n  SELECT recipe_id, name AS recipe_name, style_name, og, fg, yeast_name\n  FROM recipes WHERE $4 IS NOT NULL AND trim(lower(name)) = trim(lower($4)) LIMIT 1\n),\ninserted AS (\n  INSERT INTO batches (pill_device_id, temp_controller_device_id, start_date, beer_name, status, recipe_id)\n  SELECT pd.device_id, pd.controller_id, $3, $2, 'active', mr.recipe_id\n  FROM pill_device pd\n  LEFT JOIN matched_recipe mr ON true\n  WHERE NOT EXISTS (SELECT 1 FROM existing_batch)\n  RETURNING batch_id, pill_device_id, temp_controller_device_id, recipe_id\n)\nSELECT\n  i.batch_id,\n  i.pill_device_id,\n  i.temp_controller_device_id,\n  i.recipe_id,\n  (SELECT device_name FROM devices WHERE device_id = i.temp_controller_device_id) AS controller_name,\n  mr.recipe_name, mr.style_name, mr.og, mr.fg, mr.yeast_name,\n  eb.batch_id AS existing_batch_id, eb.beer_name AS existing_beer_name, eb.start_date AS existing_start_date,\n  -- แบตล่าสุดของ Pill ตัวนี้ — ตอน /ferment_start คือจังหวะเดียวที่ถังยังเปิดอยู่และเปลี่ยนแบต\n  -- ได้จริง (ระหว่างหมักถังปิดผนึก แบตหมดกลางคันแล้วต้องอยู่กับมันจนจบ batch)\n  (SELECT pr.battery_percent FROM pill_readings pr\n    WHERE pr.device_id = (SELECT device_id FROM pill_device) AND pr.battery_percent IS NOT NULL\n    ORDER BY pr.time_utc DESC LIMIT 1) AS pill_battery_percent\nFROM (SELECT 1) AS anchor\nLEFT JOIN inserted i ON true\nLEFT JOIN matched_recipe mr ON mr.recipe_id = i.recipe_id\nLEFT JOIN existing_batch eb ON true;",
         "options": {
@@ -253,39 +220,6 @@
           "name": "Postgres account"
         }
       }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "bebcaff9-de2e-4876-9fef-47049981c85b",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "stop",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1520,
-        272
-      ],
-      "id": "5a1498a3-5c89-4f6d-8d4c-5a5267a1aa1d",
-      "name": "Is Stop?"
     },
     {
       "parameters": {
@@ -344,38 +278,6 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "cc26bfba-fd64-490b-aa0e-bddab5d278c2",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "status",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1760,
-        300
-      ],
-      "id": "c8374c82-c7a8-402a-bad5-d960ba12061b",
-      "name": "Is Status?"
     },
     {
       "parameters": {
@@ -648,38 +550,6 @@
       ],
       "id": "2edba1b7-6310-4c78-8014-ab6cf36d325a",
       "name": "Build Status Message"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "4afd423e-1cbb-4892-a95b-71c9adc22b6c",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "set_temp",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1980,
-        750
-      ],
-      "id": "f94eb816-02c8-4e99-9b96-ed11d959331f",
-      "name": "Is Set Temp?"
     },
     {
       "parameters": {
@@ -1150,38 +1020,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "b1a2c3d4-e5f6-4789-9abc-def012345678",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "recipes",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1980,
-        950
-      ],
-      "id": "a1b2c3d4-1111-4222-8333-944455556666",
-      "name": "Is Recipes?"
-    },
-    {
-      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT\n  jsonb_agg(jsonb_build_object('name', name, 'style_name', style_name) ORDER BY name) AS recipes,\n  COUNT(*) AS recipe_count,\n  MAX(last_synced_at) AS last_synced_at\nFROM recipes\nWHERE (NULLIF($1, 'null')::text IS NULL OR name ILIKE '%' || NULLIF($1, 'null')::text || '%');",
         "options": {
@@ -1388,73 +1226,8 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "ba9d0000-e5f6-4789-9abc-def012345678",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "band",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2676,
-        1400
-      ],
-      "id": "ba9d0000-0000-4000-8000-000000000403",
-      "name": "Is Band?"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "ev000000-1111-4222-8333-444444444444",
-              "leftValue": "={{ $json.action }}",
-              "rightValue": "event",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "name": "Is Event?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2676,
-        1600
-      ],
-      "id": "ev000001-0000-4000-8000-000000000001"
-    },
-    {
-      "parameters": {
         "operation": "executeQuery",
-        "query": "-- บันทึก/ยกเลิกเหตุการณ์ในคำสั่งเดียว แยกด้วย $2 เพื่อไม่ต้องแตกสาย IF เพิ่มอีก\n-- ตรวจทุกอย่างใน SQL ชั้นเดียว: หา batch ที่ active ของ Pill นี้, กันวันอนาคต,\n-- กันวันก่อนเริ่มหมัก แล้วคืนสถานะกลับไปให้ Code node ประกอบข้อความ\nWITH target AS (\n  SELECT b.batch_id, b.beer_name, b.start_date\n  FROM batches b\n  JOIN devices d ON d.device_id = b.pill_device_id\n  WHERE trim(d.device_name) = trim($1) AND d.device_type = 'pill' AND b.status = 'active'\n  ORDER BY b.start_date DESC, b.batch_id DESC\n  LIMIT 1\n),\nchk AS (\n  SELECT t.*, $3::timestamptz AS at,\n    CASE\n      WHEN $2 = 'undo' THEN 'undo'\n      WHEN $4 = 'false' THEN 'bad_date'\n      WHEN $3::timestamptz > now() THEN 'future'\n      WHEN $3::timestamptz < t.start_date THEN 'before_start'\n      ELSE 'ok'\n    END AS verdict\n  FROM target t\n),\nremoved AS (\n  DELETE FROM batch_events e USING chk\n  WHERE chk.verdict = 'undo' AND e.batch_id = chk.batch_id\n    AND e.event_id = (SELECT max(event_id) FROM batch_events x WHERE x.batch_id = chk.batch_id)\n  RETURNING e.event_type, e.occurred_at\n),\nadded AS (\n  INSERT INTO batch_events (batch_id, event_type, occurred_at, note, created_by)\n  SELECT chk.batch_id, $2, chk.at, NULLIF($5, 'null'), $6 FROM chk WHERE chk.verdict = 'ok'\n  RETURNING event_type, occurred_at\n)\nSELECT\n  (SELECT batch_id FROM chk)   AS batch_id,\n  (SELECT beer_name FROM chk)  AS beer_name,\n  to_char((SELECT start_date FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS start_text,\n  COALESCE((SELECT verdict FROM chk), 'no_batch') AS verdict,\n  $2::text AS requested_type,\n  to_char((SELECT at FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS at_text,\n  (SELECT EXTRACT(EPOCH FROM (now() - at))/3600 FROM chk) AS hours_ago,\n  (SELECT event_type FROM removed) AS removed_type,\n  to_char((SELECT occurred_at FROM removed) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS removed_at_text,\n  (SELECT count(*) FROM added) AS added_count,\n  (SELECT jsonb_agg(jsonb_build_object(\n      'at', to_char(e.occurred_at AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI'),\n      'type', e.event_type, 'note', e.note) ORDER BY e.occurred_at)\n   FROM batch_events e WHERE e.batch_id = (SELECT batch_id FROM chk)) AS timeline;",
+        "query": "-- บันทึก/ยกเลิกเหตุการณ์ในคำสั่งเดียว แยกด้วย $2 เพื่อไม่ต้องแตกสาย IF เพิ่มอีก\n-- ตรวจทุกอย่างใน SQL ชั้นเดียว: หา batch ที่ active ของ Pill นี้, กันวันอนาคต,\n-- กันวันก่อนเริ่มหมัก แล้วคืนสถานะกลับไปให้ Code node ประกอบข้อความ\nWITH target AS (\n  SELECT b.batch_id, b.beer_name, b.start_date\n  FROM batches b\n  JOIN devices d ON d.device_id = b.pill_device_id\n  WHERE trim(d.device_name) = trim($1) AND d.device_type = 'pill' AND b.status = 'active'\n  ORDER BY b.start_date DESC, b.batch_id DESC\n  LIMIT 1\n),\nchk AS (\n  SELECT t.*, $3::timestamptz AS at,\n    CASE\n      WHEN $2 = 'undo' THEN 'undo'\n      WHEN $4 = 'false' THEN 'bad_date'\n      -- กดคำสั่งซ้ำเป็นเรื่องธรรมชาติ โดยเฉพาะหลังเจอ error แล้วลองใหม่ (เจอจริง 10 ก.ย.\n      -- ได้ dry_hop เวลาเดียวกัน 2 แถว ทำให้ prompt นับเป็น \"รอบที่ 1\" กับ \"รอบที่ 2\"\n      -- ทั้งที่ใส่ฮอปรอบเดียว แล้ว AI จะไม่เตือนรอบที่ยังไม่ได้ทำ)\n      WHEN EXISTS (SELECT 1 FROM batch_events x WHERE x.batch_id = t.batch_id\n                     AND x.event_type = $2 AND x.occurred_at = $3::timestamptz) THEN 'duplicate'\n      WHEN $3::timestamptz > now() THEN 'future'\n      WHEN $3::timestamptz < t.start_date THEN 'before_start'\n      ELSE 'ok'\n    END AS verdict\n  FROM target t\n),\nremoved AS (\n  DELETE FROM batch_events e USING chk\n  WHERE chk.verdict = 'undo' AND e.batch_id = chk.batch_id\n    AND e.event_id = (SELECT max(event_id) FROM batch_events x WHERE x.batch_id = chk.batch_id)\n  RETURNING e.event_type, e.occurred_at\n),\nadded AS (\n  INSERT INTO batch_events (batch_id, event_type, occurred_at, note, created_by)\n  SELECT chk.batch_id, $2, chk.at, NULLIF($5, 'null'), $6 FROM chk WHERE chk.verdict = 'ok'\n  RETURNING event_type, occurred_at\n)\nSELECT\n  (SELECT batch_id FROM chk)   AS batch_id,\n  (SELECT beer_name FROM chk)  AS beer_name,\n  to_char((SELECT start_date FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS start_text,\n  COALESCE((SELECT verdict FROM chk), 'no_batch') AS verdict,\n  $2::text AS requested_type,\n  to_char((SELECT at FROM chk) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS at_text,\n  (SELECT EXTRACT(EPOCH FROM (now() - at))/3600 FROM chk) AS hours_ago,\n  (SELECT event_type FROM removed) AS removed_type,\n  to_char((SELECT occurred_at FROM removed) AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI') AS removed_at_text,\n  (SELECT count(*) FROM added) AS added_count,\n  (SELECT jsonb_agg(jsonb_build_object(\n      'at', to_char(e.occurred_at AT TIME ZONE 'Asia/Bangkok','DD/MM/YYYY HH24:MI'),\n      'type', e.event_type, 'note', e.note) ORDER BY e.occurred_at)\n   FROM batch_events e WHERE e.batch_id = (SELECT batch_id FROM chk)) AS timeline;",
         "options": {
           "queryReplacement": "={{$json.pill}}, {{$json.event_type}}, {{$json.event_at}}, {{$json.event_date_ok}}, {{$json.event_note}}, {{$json.requested_by}}"
         }
@@ -1477,7 +1250,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ประกอบข้อความตอบกลับของ /ferment_event — ทุกเส้นทางต้องตอบอะไรสักอย่างเสมอ\n// ถ้าเงียบผู้ใช้จะไม่รู้ว่าบันทึกติดหรือไม่ แล้วไปกดซ้ำ\nconst LABEL = { dry_hop: '🌿 Dry hop', pitch: '🧫 ลงยีสต์', transfer: '🔄 ถ่ายถัง',\n                sample: '🧪 เก็บตัวอย่าง', other: '📝 อื่นๆ', undo: '↩️ ยกเลิกรายการล่าสุด' };\nconst d = $input.first().json;\nconst raw = $('Parse Interaction Command').first().json;\nconst nameOf = (t) => LABEL[t] || t || '-';\n\nlet content;\nif (d.verdict === 'no_batch') {\n  content = '❌ ไม่พบ batch ที่กำลังหมักอยู่ของ ' + (raw.pill || '-');\n} else if (d.verdict === 'bad_date') {\n  content = '⚠️ อ่านวันที่ \"' + (raw.event_date_raw || '') + '\" ไม่ออก\\n'\n    + 'ใช้รูปแบบ d/m/yyyy HH:mm เช่น 9/9/2026 18:00 (ไม่ใส่ = ใช้เวลาปัจจุบัน)';\n} else if (d.verdict === 'future') {\n  content = '⚠️ ' + d.at_text + ' อยู่ในอนาคต — ยังบันทึกไม่ได้';\n} else if (d.verdict === 'before_start') {\n  content = '⚠️ ' + d.at_text + ' อยู่ก่อนวันเริ่มหมัก (' + d.start_text + ') — เช็ควันอีกครั้ง';\n} else if (d.verdict === 'undo') {\n  content = d.removed_type\n    ? ('✅ ลบแล้ว — ' + nameOf(d.removed_type) + ' ' + d.removed_at_text)\n    : ('ℹ️ ไม่มีเหตุการณ์ให้ลบใน ' + (d.beer_name || 'batch นี้'));\n} else {\n  const ago = d.hours_ago != null ? Number(d.hours_ago) : null;\n  const agoText = ago == null ? '' :\n    (ago < 1 ? '  (เมื่อครู่)' : '  (' + ago.toFixed(1) + ' ชม.ที่แล้ว)');\n  content = '✅ บันทึกแล้ว — ' + (d.beer_name || '-') + '\\n\\n'\n    + nameOf(d.requested_type) + ' · ' + d.at_text + agoText\n    + (raw.event_note ? ('\\n' + String(raw.event_note).replace(/，/g, ',')) : '');\n}\n\n// โชว์ไทม์ไลน์ทุกครั้งที่มี batch จะได้เห็นทันทีว่าบันทึกผิดวันไหม ไม่ต้องมีคำสั่งดูรายการแยก\nlet tl = Array.isArray(d.timeline) ? d.timeline : [];\n// CTE ทั้งหมดในคำสั่งเดียวเห็น snapshot ก่อนการลบ ไทม์ไลน์ที่ได้กลับมาจึงยังมีรายการที่\n// เพิ่ง DELETE ไปด้วย — ตัดออกเองตรงนี้ ไม่งั้นผู้ใช้กด undo แล้วเห็นของเดิมอยู่ นึกว่าลบไม่ติด\nif (d.verdict === 'undo' && d.removed_type) {\n  const i = tl.findIndex(e => e.type === d.removed_type && e.at === d.removed_at_text);\n  if (i >= 0) tl = tl.slice(0, i).concat(tl.slice(i + 1));\n}\nif (d.verdict !== 'no_batch' && d.verdict !== 'bad_date') {\n  const lines = ['', 'ไทม์ไลน์ของ batch นี้', '  ' + d.start_text + '   เริ่มหมัก'];\n  tl.forEach(e => lines.push('  ' + e.at + '   ' + nameOf(e.type)\n    + (e.note ? (' — ' + String(e.note).replace(/，/g, ',')) : '')));\n  if (!tl.length) lines.push('  (ยังไม่มีเหตุการณ์อื่น)');\n  content += '\\n' + lines.join('\\n');\n}\n// Send Followup ประกอบ URL จาก $json ของ item ที่ไหลเข้ามา ไม่ได้อ้าง node ต้นทางด้วยชื่อ\n// ถ้าไม่ส่งสองตัวนี้ต่อ URL จะกลายเป็น /webhooks///messages/@original แล้ว Discord ตอบ\n// \"Invalid Form Body: Value \\\"messages\\\" is not snowflake\" (เจอจริง execution 949)\nreturn [{ json: {\n  content: content.slice(0, 1900),\n  application_id: raw.application_id,\n  interaction_token: raw.interaction_token\n} }];"
+        "jsCode": "// ประกอบข้อความตอบกลับของ /ferment_event — ทุกเส้นทางต้องตอบอะไรสักอย่างเสมอ\n// ถ้าเงียบผู้ใช้จะไม่รู้ว่าบันทึกติดหรือไม่ แล้วไปกดซ้ำ\nconst LABEL = { dry_hop: '🌿 Dry hop', pitch: '🧫 ลงยีสต์', transfer: '🔄 ถ่ายถัง',\n                sample: '🧪 เก็บตัวอย่าง', other: '📝 อื่นๆ', undo: '↩️ ยกเลิกรายการล่าสุด' };\nconst d = $input.first().json;\nconst raw = $('Parse Interaction Command').first().json;\nconst nameOf = (t) => LABEL[t] || t || '-';\n\nlet content;\nif (d.verdict === 'no_batch') {\n  content = '❌ ไม่พบ batch ที่กำลังหมักอยู่ของ ' + (raw.pill || '-');\n} else if (d.verdict === 'bad_date') {\n  content = '⚠️ อ่านวันที่ \"' + (raw.event_date_raw || '') + '\" ไม่ออก\\n'\n    + 'ใช้รูปแบบ d/m/yyyy HH:mm เช่น 9/9/2026 18:00 (ไม่ใส่ = ใช้เวลาปัจจุบัน)';\n} else if (d.verdict === 'future') {\n  content = '⚠️ ' + d.at_text + ' อยู่ในอนาคต — ยังบันทึกไม่ได้';\n} else if (d.verdict === 'before_start') {\n  content = '⚠️ ' + d.at_text + ' อยู่ก่อนวันเริ่มหมัก (' + d.start_text + ') — เช็ควันอีกครั้ง';\n} else if (d.verdict === 'duplicate') {\n  content = 'ℹ️ บันทึกไว้แล้ว — ' + nameOf(d.requested_type) + ' ' + d.at_text\n    + '\\nไม่ได้เพิ่มซ้ำ ถ้าต้องการบันทึกอีกรอบจริงๆ ให้ระบุเวลาที่ต่างออกไป';\n} else if (d.verdict === 'undo') {\n  content = d.removed_type\n    ? ('✅ ลบแล้ว — ' + nameOf(d.removed_type) + ' ' + d.removed_at_text)\n    : ('ℹ️ ไม่มีเหตุการณ์ให้ลบใน ' + (d.beer_name || 'batch นี้'));\n} else {\n  const ago = d.hours_ago != null ? Number(d.hours_ago) : null;\n  const agoText = ago == null ? '' :\n    (ago < 1 ? '  (เมื่อครู่)' : '  (' + ago.toFixed(1) + ' ชม.ที่แล้ว)');\n  content = '✅ บันทึกแล้ว — ' + (d.beer_name || '-') + '\\n\\n'\n    + nameOf(d.requested_type) + ' · ' + d.at_text + agoText\n    + (raw.event_note ? ('\\n' + String(raw.event_note).replace(/，/g, ',')) : '');\n}\n\n// โชว์ไทม์ไลน์ทุกครั้งที่มี batch จะได้เห็นทันทีว่าบันทึกผิดวันไหม ไม่ต้องมีคำสั่งดูรายการแยก\nlet tl = Array.isArray(d.timeline) ? d.timeline : [];\n// CTE ทั้งหมดในคำสั่งเดียวเห็น snapshot ก่อนการลบ ไทม์ไลน์ที่ได้กลับมาจึงยังมีรายการที่\n// เพิ่ง DELETE ไปด้วย — ตัดออกเองตรงนี้ ไม่งั้นผู้ใช้กด undo แล้วเห็นของเดิมอยู่ นึกว่าลบไม่ติด\nif (d.verdict === 'undo' && d.removed_type) {\n  const i = tl.findIndex(e => e.type === d.removed_type && e.at === d.removed_at_text);\n  if (i >= 0) tl = tl.slice(0, i).concat(tl.slice(i + 1));\n}\nif (d.verdict !== 'no_batch' && d.verdict !== 'bad_date') {\n  const lines = ['', 'ไทม์ไลน์ของ batch นี้', '  ' + d.start_text + '   เริ่มหมัก'];\n  tl.forEach(e => lines.push('  ' + e.at + '   ' + nameOf(e.type)\n    + (e.note ? (' — ' + String(e.note).replace(/，/g, ',')) : '')));\n  if (!tl.length) lines.push('  (ยังไม่มีเหตุการณ์อื่น)');\n  content += '\\n' + lines.join('\\n');\n}\n// Send Followup ประกอบ URL จาก $json ของ item ที่ไหลเข้ามา ไม่ได้อ้าง node ต้นทางด้วยชื่อ\n// ถ้าไม่ส่งสองตัวนี้ต่อ URL จะกลายเป็น /webhooks///messages/@original แล้ว Discord ตอบ\n// \"Invalid Form Body: Value \\\"messages\\\" is not snowflake\" (เจอจริง execution 949)\nreturn [{ json: {\n  content: content.slice(0, 1900),\n  application_id: raw.application_id,\n  interaction_token: raw.interaction_token\n} }];"
       },
       "name": "Build Event Message",
       "type": "n8n-nodes-base.code",
@@ -1487,6 +1260,191 @@
         1600
       ],
       "id": "ev000003-0000-4000-8000-000000000003"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt000000-0000-4000-8000-000000000000",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt010000-0000-4000-8000-000000000001",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "stop",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "stop"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt020000-0000-4000-8000-000000000002",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "status"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt030000-0000-4000-8000-000000000003",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "set_temp",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "set_temp"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt040000-0000-4000-8000-000000000004",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "recipes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "recipes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt050000-0000-4000-8000-000000000005",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "band",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "band"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "rt060000-0000-4000-8000-000000000006",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "event",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "event"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "name": "Route Command",
+      "position": [
+        1312,
+        160
+      ],
+      "id": "rt000000-0000-4000-8000-000000000000"
     }
   ],
   "connections": {
@@ -1581,25 +1539,7 @@
       "main": [
         [
           {
-            "node": "Is Start?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Start?": {
-      "main": [
-        [
-          {
-            "node": "Create Batch",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Stop?",
+            "node": "Route Command",
             "type": "main",
             "index": 0
           }
@@ -1622,24 +1562,6 @@
         ]
       ]
     },
-    "Is Stop?": {
-      "main": [
-        [
-          {
-            "node": "Stop Batch",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Status?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Stop Batch": {
       "main": [
         [
@@ -1656,24 +1578,6 @@
         [
           {
             "node": "Send Followup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Status?": {
-      "main": [
-        [
-          {
-            "node": "Get Batch For Analysis",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Set Temp?",
             "type": "main",
             "index": 0
           }
@@ -1785,24 +1689,6 @@
         [
           {
             "node": "Send Followup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Is Set Temp?": {
-      "main": [
-        [
-          {
-            "node": "Get Batch For Set Temp",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Recipes?",
             "type": "main",
             "index": 0
           }
@@ -2040,24 +1926,6 @@
         ]
       ]
     },
-    "Is Recipes?": {
-      "main": [
-        [
-          {
-            "node": "Get Recipes List",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Band?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Get Recipes List": {
       "main": [
         [
@@ -2153,24 +2021,6 @@
         ]
       ]
     },
-    "Is Band?": {
-      "main": [
-        [
-          {
-            "node": "Set Beer Band",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Is Event?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Set Beer Band": {
       "main": [
         [
@@ -2193,18 +2043,6 @@
         ]
       ]
     },
-    "Is Event?": {
-      "main": [
-        [
-          {
-            "node": "Save Batch Event",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
     "Save Batch Event": {
       "main": [
         [
@@ -2221,6 +2059,59 @@
         [
           {
             "node": "Send Followup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Create Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Batch For Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Batch For Set Temp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Recipes List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Beer Band",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Batch Event",
             "type": "main",
             "index": 0
           }

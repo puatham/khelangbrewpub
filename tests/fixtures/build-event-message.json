@@ -249,6 +249,47 @@
         "application_id": "111222333",
         "interaction_token": "tok_abc"
       }
+    },
+    {
+      "name": "บันทึกซ้ำเวลาเดิม — ต้องบอกว่ามีแล้ว ไม่ใช่เงียบหรือเพิ่มซ้ำ",
+      "input": [
+        {
+          "verdict": "duplicate",
+          "beer_name": "Hazy DIPA",
+          "requested_type": "dry_hop",
+          "at_text": "09/09/2026 12:30",
+          "start_text": "07/09/2026 23:00",
+          "added_count": 0,
+          "timeline": [
+            {
+              "at": "09/09/2026 12:30",
+              "type": "dry_hop",
+              "note": null
+            }
+          ]
+        }
+      ],
+      "context": {
+        "Parse Interaction Command": [
+          {
+            "pill": "Pill01",
+            "event_note": "รอบ 1 Citra",
+            "event_date_raw": null,
+            "application_id": "111222333",
+            "interaction_token": "tok_abc"
+          }
+        ]
+      },
+      "expect": {
+        "content": [
+          "~ℹ️ บันทึกไว้แล้ว",
+          "~🌿 Dry hop 09/09/2026 12:30",
+          "~ไม่ได้เพิ่มซ้ำ",
+          "~ระบุเวลาที่ต่างออกไป"
+        ],
+        "application_id": "111222333",
+        "interaction_token": "tok_abc"
+      }
     }
   ]
 }
