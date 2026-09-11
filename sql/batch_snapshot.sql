@@ -66,6 +66,14 @@ RETURNS TABLE (
   yeast_type                 text,
   yeast_flocculation         text,
   yeast_diastatic            boolean,
+  -- รวมน้ำหนัก dry hop ทุกรอบ ÷ batchSize ของสูตร (ทั้งสองอย่างมีอยู่ใน raw_data ของ
+  -- Brewfather อยู่แล้ว) ใช้เตือน hop burn โดยไม่ผูกกับสูตรใดสูตรหนึ่ง — เทียบ 14 สูตร
+  -- ที่ sync ไว้จริงพบว่าส่วนใหญ่อยู่ 3-6 g/L มีแค่ Hazy DIPA (14.3) กับ Pliny the Elder
+  -- (10.1) ที่สูงเกิน 10 — งานวิจัยชี้ว่าสูตร hazy ที่หนักที่สุดแทบไม่เกิน 10-12 g/L รวม
+  -- จึงใช้ 10 g/L เป็นเกณฑ์ "หนักผิดปกติ ต้องระวัง" (ตั้งเกณฑ์ตรงนี้ ไม่ใช่ในโค้ด n8n
+  -- เพราะเป็นข้อเท็จจริงเรื่องสูตร ไม่ใช่ตรรกะของ workflow ไหนโดยเฉพาะ)
+  dry_hop_total_g            numeric,
+  dry_hop_load_g_per_l       numeric,
   pill_stale_hours           numeric,
   pill_last_at               timestamptz,
   pill_battery_percent       numeric,
@@ -131,7 +139,13 @@ recipe_info AS (
          y.attenuation AS yeast_attenuation, y.min_attenuation AS yeast_min_attenuation, y.max_attenuation AS yeast_max_attenuation,
          y.raw_data->>'type' AS yeast_type,
          y.flocculation AS yeast_flocculation,
-         (y.raw_data->>'fermentsAll')::boolean AS yeast_diastatic
+         (y.raw_data->>'fermentsAll')::boolean AS yeast_diastatic,
+         (SELECT sum((dh->>'amount')::numeric) FROM jsonb_array_elements(COALESCE(r.raw_data->'hops', '[]'::jsonb)) dh
+            WHERE dh->>'use' ILIKE '%dry%') AS dry_hop_total_g,
+         CASE WHEN (r.raw_data->>'batchSize')::numeric > 0 THEN
+           (SELECT sum((dh->>'amount')::numeric) FROM jsonb_array_elements(COALESCE(r.raw_data->'hops', '[]'::jsonb)) dh
+              WHERE dh->>'use' ILIKE '%dry%') / (r.raw_data->>'batchSize')::numeric
+         END AS dry_hop_load_g_per_l
   FROM recipes r
   LEFT JOIN yeasts y ON trim(lower(y.name)) = trim(lower(r.yeast_name))
   WHERE r.recipe_id = (SELECT recipe_id FROM b)
@@ -233,6 +247,7 @@ SELECT
   ri.yeast_name, ri.yeast_min_temp_c, ri.yeast_max_temp_c,
   ri.yeast_attenuation, ri.yeast_min_attenuation, ri.yeast_max_attenuation,
   ri.yeast_type, ri.yeast_flocculation, ri.yeast_diastatic,
+  ri.dry_hop_total_g, ri.dry_hop_load_g_per_l,
   sc.pill_stale_hours, sc.pill_last_at,
   lb.battery_percent AS pill_battery_percent,
   fg.gap AS fallback_gap_c, fg.n_points AS fallback_gap_points, fg.gap_sd AS fallback_gap_sd,

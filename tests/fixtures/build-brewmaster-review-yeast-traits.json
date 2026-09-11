@@ -136,6 +136,70 @@
           "~เปลี่ยนจริง 48 ชม. 0.0009 (นิ่งในระดับที่วัดยืนยันได้จริงแล้ว)"
         ]
       }
+    },
+    {
+      "name": "dry hop โหลดหนัก 14.3 g/L — ต้องเตือน hop burn ในรีวิว brewmaster ด้วย",
+      "input": [
+        {
+          "batch_id": 6,
+          "beer_name": "Test Heavy",
+          "detected_phase": "slowing_ferment",
+          "reasoning": "SG ยังลง",
+          "temperature_c": 18.0,
+          "controller_temp_c": 17.9,
+          "target_temperature_c": 18.0,
+          "abv_percent": 8.0
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          {
+            "brewmaster_context": {
+              "dry_hop_total_g": 400,
+              "dry_hop_load_g_per_l": 14.29
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~dry hop รวม 400g",
+          "~14.3 g/L",
+          "~หนักกว่าปกติมาก เสี่ยง hop burn"
+        ]
+      }
+    },
+    {
+      "name": "dry hop โหลดเบา — ไม่ต้องเตือน hop burn ในรีวิว brewmaster",
+      "input": [
+        {
+          "batch_id": 7,
+          "beer_name": "Test Light",
+          "detected_phase": "slowing_ferment",
+          "reasoning": "SG ยังลง",
+          "temperature_c": 18.0,
+          "controller_temp_c": 17.9,
+          "target_temperature_c": 18.0,
+          "abv_percent": 6.0
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          {
+            "brewmaster_context": {
+              "dry_hop_total_g": 100,
+              "dry_hop_load_g_per_l": 3.5
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~!หนักกว่าปกติมาก เสี่ยง hop burn"
+        ]
+      }
     }
   ]
 }

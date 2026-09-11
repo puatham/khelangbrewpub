@@ -176,6 +176,122 @@
         "brewmaster_context.yeast_flocculation": null,
         "brewmaster_context.yeast_diastatic": null
       }
+    },
+    {
+      "name": "dry hop โหลดหนัก 14.3 g/L (เหมือน Hazy DIPA จริง) — ต้องเตือน hop burn",
+      "input": [
+        {
+          "batch_id": 6,
+          "beer_name": "Test Heavy",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.02,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-10T00:00:00Z",
+          "recipe_name": "Test Hazy DIPA",
+          "style_name": "DIPA",
+          "dry_hop_total_g": 400,
+          "dry_hop_load_g_per_l": 14.285714285714286,
+          "fermentation_steps": [],
+          "dry_hop_plan": [
+            {
+              "day": "9",
+              "name": "Citra",
+              "amount_g": "95"
+            }
+          ]
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~dry hop รวม 400g",
+          "~14.3 g/L",
+          "~หนักกว่าปกติมาก เสี่ยง hop burn"
+        ],
+        "brewmaster_context.dry_hop_load_g_per_l": 14.29
+      }
+    },
+    {
+      "name": "dry hop โหลดเบา 3.2 g/L — ต้องไม่มีคำเตือน hop burn เลย",
+      "input": [
+        {
+          "batch_id": 7,
+          "beer_name": "Test Light",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.02,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-10T00:00:00Z",
+          "recipe_name": "Test Red IPA",
+          "style_name": "IPA",
+          "dry_hop_total_g": 384,
+          "dry_hop_load_g_per_l": 3.2,
+          "fermentation_steps": [],
+          "dry_hop_plan": [
+            {
+              "day": "9",
+              "name": "Citra",
+              "amount_g": "95"
+            }
+          ]
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~!หนักกว่าปกติมาก เสี่ยง hop burn"
+        ]
+      }
+    },
+    {
+      "name": "ไม่มีข้อมูล dry_hop_load_g_per_l (สูตรเก่า/ไม่มี batchSize) — ต้องไม่พังและไม่เตือน",
+      "input": [
+        {
+          "batch_id": 8,
+          "beer_name": "Test NoData",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-10T00:00:00Z",
+              "sg": 1.02,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-10T00:00:00Z",
+          "recipe_name": "Test Old Recipe",
+          "style_name": "IPA",
+          "fermentation_steps": [],
+          "dry_hop_plan": [
+            {
+              "day": "9",
+              "name": "Citra",
+              "amount_g": "95"
+            }
+          ]
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~!หนักกว่าปกติมาก เสี่ยง hop burn"
+        ],
+        "brewmaster_context.dry_hop_load_g_per_l": null
+      }
     }
   ]
 }
