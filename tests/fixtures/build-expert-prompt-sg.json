@@ -929,6 +929,109 @@
       "expect": {
         "brewmaster_context.sg_summary_available": false
       }
+    },
+    {
+      "name": "ลด 0.00211 ใน 48 ชม. (ค่าจริงจาก batch 4 11 ก.ย.) — เกินเกณฑ์นิดเดียว ต้องบอกว่ายังไม่นิ่งพอ",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-09T08:00:00Z",
+              "sg": 1.01546,
+              "temp": 16.5
+            },
+            {
+              "t": "2026-09-10T20:00:00Z",
+              "sg": 1.01475,
+              "temp": 16.5
+            },
+            {
+              "t": "2026-09-11T08:00:00Z",
+              "sg": 1.01335,
+              "temp": 16.5
+            }
+          ],
+          "analysis_time_iso": "2026-09-11T08:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~ลด 0.0021 ใน 48 ชม.",
+          "~ยังไม่นิ่งพอ (เกณฑ์ 0.002)"
+        ],
+        "brewmaster_context.sg_change_48h": -0.0021
+      }
+    },
+    {
+      "name": "ลด 0.0009 ใน 48 ชม. — อยู่ในเกณฑ์ที่ไฮโดรมิเตอร์มือก็แยกไม่ออก ต้องบอกว่านิ่งแล้ว",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-09T00:00:00Z",
+              "sg": 1.01,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "sg": 1.0091,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-11T00:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~ลด 0.0009 ใน 48 ชม.",
+          "~นิ่งในระดับที่วัดยืนยันได้จริงแล้ว (เกณฑ์ 0.002)"
+        ],
+        "brewmaster_context.sg_change_48h": -0.0009
+      }
+    },
+    {
+      "name": "มีข้อมูลแค่ 10 ชม. — ต้องบอกว่าข้อมูลย้อนหลังไม่พอ ไม่ใช่เดา",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Hazy DIPA",
+          "current_phase": "slowing_ferment",
+          "prep_alerted_for_phase": null,
+          "start_date": "2026-09-07T16:00:00Z",
+          "pill_series": [
+            {
+              "t": "2026-09-11T00:00:00Z",
+              "sg": 1.02,
+              "temp": 18.0
+            },
+            {
+              "t": "2026-09-11T10:00:00Z",
+              "sg": 1.0195,
+              "temp": 18.0
+            }
+          ],
+          "analysis_time_iso": "2026-09-11T10:00:00Z"
+        }
+      ],
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~ยังไม่มีข้อมูลย้อนหลังพอ (ต้องมีอย่างน้อย 48 ชม.)"
+        ],
+        "brewmaster_context.sg_change_48h": null
+      }
     }
   ]
 }

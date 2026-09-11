@@ -57,7 +57,9 @@
       ],
       "context": {
         "Build Expert Prompt": [
-          { "brewmaster_context": {} }
+          {
+            "brewmaster_context": {}
+          }
         ]
       },
       "expectCount": 1,
@@ -65,6 +67,73 @@
         "prompt": [
           "~ไม่ระบุ (batch นี้ไม่ได้ผูก recipe ไว้)",
           "~!undefined"
+        ]
+      }
+    },
+    {
+      "name": "sg_change_48h ต้องโผล่ในบรรทัด 'เปลี่ยนจริง 48 ชม.' พร้อมป้ายนิ่ง/ไม่นิ่ง",
+      "input": [
+        {
+          "batch_id": 4,
+          "beer_name": "Test",
+          "detected_phase": "slowing_ferment",
+          "reasoning": "SG ยังลง",
+          "temperature_c": 16.6,
+          "controller_temp_c": 16.55,
+          "target_temperature_c": 16.6,
+          "abv_percent": 6.5
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          {
+            "brewmaster_context": {
+              "sg_summary_available": true,
+              "sg_now": 1.0133,
+              "sg_flat_hours": 7.3,
+              "sg_drop_24h": -0.0006,
+              "sg_slope_12h_per_hour": -5e-05,
+              "attenuation_status": "หมักไปแล้วราว 81%",
+              "sg_change_48h": -0.00211
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~เปลี่ยนจริง 48 ชม. 0.0021 (ยังไม่นิ่งพอ)"
+        ]
+      }
+    },
+    {
+      "name": "sg_change_48h นิ่งพอ — ต้องขึ้นป้ายนิ่งแล้ว ไม่ใช่ไม่นิ่งพอ",
+      "input": [
+        {
+          "batch_id": 5,
+          "beer_name": "Test2",
+          "detected_phase": "fg_stable",
+          "reasoning": "SG นิ่งแล้ว",
+          "temperature_c": 16.6,
+          "controller_temp_c": 16.55,
+          "target_temperature_c": 16.6,
+          "abv_percent": 6.5
+        }
+      ],
+      "context": {
+        "Build Expert Prompt": [
+          {
+            "brewmaster_context": {
+              "sg_summary_available": true,
+              "sg_change_48h": -0.0009
+            }
+          }
+        ]
+      },
+      "expectCount": 1,
+      "expect": {
+        "prompt": [
+          "~เปลี่ยนจริง 48 ชม. 0.0009 (นิ่งในระดับที่วัดยืนยันได้จริงแล้ว)"
         ]
       }
     }
